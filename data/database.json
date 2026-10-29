@@ -1,0 +1,35 @@
+{
+  "viaturas": [],
+  "militares": [
+    "2º Sgt Dantas"
+  ],
+  "operadoresSenhas": {
+    "2º Sgt Dantas": "123456"
+  },
+  "registros": [],
+  "bairros": [
+    "Centro",
+    "Setor Bueno",
+    "Jardim Goiás",
+    "Marista",
+    "Campinas",
+    "Setor Sul",
+    "Setor Oeste",
+    "Vila Nova",
+    "Jardim América"
+  ],
+  "destinos": [
+    "Ocorrência",
+    "Vistorias",
+    "Serviço da OBM",
+    "Diversos",
+    "Abastecimento"
+  ],
+  "escalas": [],
+  "proximoId": 5,
+  "supabaseConfig": {
+    "url": "",
+    "anonKey": ""
+  },
+  "updatedAt": "2026-10-27T14:31:10.810Z"
+}

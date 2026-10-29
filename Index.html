@@ -1,0 +1,2283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <base target="_top" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SICOVI - Sistema de Controle de Viaturas</title>
+  
+  <!-- Google Fonts & Material Symbols -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  
+  <!-- jsPDF & AutoTable para Relatórios Oficiais -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    :root {
+      --primary: #991b1b;
+      --primary-hover: #7f1d1d;
+      --primary-light: #fef2f2;
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1;
+      --slate-400: #94a3b8;
+      --slate-500: #64748b;
+      --slate-600: #475569;
+      --slate-700: #334155;
+      --slate-800: #1e293b;
+      --slate-900: #0f172a;
+      --emerald-500: #10b981;
+      --emerald-600: #059669;
+      --emerald-50: #ecfdf5;
+      --amber-500: #f59e0b;
+      --amber-600: #d97706;
+      --amber-50: #fffbeb;
+      --rose-500: #ef4444;
+      --rose-600: #dc2626;
+      --rose-50: #fef2f2;
+      --blue-500: #3b82f6;
+      --blue-600: #2563eb;
+      --blue-50: #eff6ff;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.25);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f1f5f9;
+      color: var(--slate-800);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* =========================================================
+       TELA DE LOGIN INTEGRADA (MESMA PÁGINA)
+       ========================================================= */
+    #tela-login {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px 16px;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(153, 27, 27, 0.88)), 
+                  radial-gradient(ellipse at top, #1e293b, #0f172a);
+      background-size: cover;
+      position: relative;
+    }
+
+    .login-container {
+      background: rgba(255, 255, 255, 0.98);
+      padding: 38px 32px;
+      border-radius: 20px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+      max-width: 420px;
+      width: 100%;
+      border-top: 5px solid var(--primary);
+      position: relative;
+      animation: loginFadeIn 0.25s ease-out;
+    }
+
+    @keyframes loginFadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .login-logo-wrap {
+      text-align: center;
+      margin-bottom: 18px;
+    }
+
+    .login-logo-wrap img {
+      max-height: 85px;
+      width: auto;
+      object-fit: contain;
+    }
+
+    .login-title {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 4px;
+      text-align: center;
+      color: var(--slate-900);
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .login-subtitle {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--primary);
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .login-form-group {
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .login-form-label {
+      color: var(--slate-800);
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+
+    .login-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .login-input-icon {
+      position: absolute;
+      left: 12px;
+      color: var(--slate-400);
+      font-size: 20px;
+      pointer-events: none;
+    }
+
+    .login-form-control {
+      width: 100%;
+      padding: 12px 14px 12px 40px;
+      border: 1.5px solid var(--slate-300);
+      border-radius: var(--radius-md);
+      transition: all 0.2s ease;
+      background-color: var(--slate-50);
+      font-size: 0.9rem;
+      font-family: inherit;
+      color: var(--slate-800);
+    }
+
+    .login-form-control:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(153, 27, 27, 0.15);
+      background-color: #fff;
+      outline: none;
+    }
+
+    .login-btn-toggle-pass {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      color: var(--slate-400);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+    }
+    .login-btn-toggle-pass:hover {
+      color: var(--slate-700);
+    }
+
+    .login-remember-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      font-size: 0.8rem;
+      color: var(--slate-600);
+    }
+
+    .login-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .login-checkbox-label input {
+      accent-color: var(--primary);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .btn-link-mudar-senha {
+      background: none;
+      border: none;
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .btn-link-mudar-senha:hover {
+      color: var(--primary-hover);
+    }
+
+    .login-btn-submit {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 14px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      letter-spacing: 0.3px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(153, 27, 27, 0.3);
+    }
+
+    .login-btn-submit:hover:not(:disabled) {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(153, 27, 27, 0.4);
+    }
+
+    .login-btn-submit:disabled {
+      opacity: 0.75;
+      cursor: not-allowed;
+    }
+
+    .login-footer-text {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--slate-400);
+      text-align: center;
+      margin-top: 24px;
+      letter-spacing: 0.3px;
+    }
+
+    /* Modal de Erro de Login */
+    .modal-erro-login {
+      display: none;
+      position: fixed;
+      z-index: 99999;
+      inset: 0;
+      background-color: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-erro-login-content {
+      background-color: white;
+      padding: 32px 24px;
+      border-radius: 16px;
+      text-align: center;
+      max-width: 360px;
+      width: 100%;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      border-top: 4px solid var(--primary);
+      animation: popIn 0.2s ease-out;
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-erro-login-icon {
+      font-size: 48px;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
+
+    .btn-fechar-erro-login {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 11px 24px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-top: 18px;
+      width: 100%;
+      transition: background 0.15s;
+    }
+
+    .btn-fechar-erro-login:hover {
+      background-color: var(--primary-hover);
+    }
+
+    /* =========================================================
+       TELA PRINCIPAL (DASHBOARD)
+       ========================================================= */
+    #tela-principal {
+      display: none;
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    .top-header {
+      background: white;
+      border-bottom: 1px solid var(--slate-200);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .header-inner {
+      max-width: 98%;
+      margin: 0 auto;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-logo {
+      height: 44px;
+      width: auto;
+      object-fit: contain;
+    }
+    .brand-titles {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      line-height: 1.2;
+    }
+    .brand-subtitle {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--slate-500);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sync-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--slate-100);
+      border: 1px solid var(--slate-200);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--slate-600);
+    }
+    .sync-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--emerald-500);
+    }
+    .sync-dot.syncing {
+      background: var(--amber-500);
+      animation: pulse 1s infinite;
+    }
+
+    .operator-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--slate-50);
+      border: 1px solid var(--slate-200);
+      padding: 5px 12px;
+      border-radius: var(--radius-md);
+    }
+    .operator-avatar {
+      width: 30px;
+      height: 30px;
+      background: var(--primary-light);
+      color: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .operator-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .operator-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--slate-400);
+    }
+    .operator-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--slate-800);
+    }
+
+    .btn-header-action {
+      background: transparent;
+      border: none;
+      color: var(--slate-500);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .btn-header-action:hover {
+      background: var(--slate-100);
+      color: var(--slate-800);
+    }
+    .btn-header-action.btn-logout:hover {
+      background: var(--rose-50);
+      color: var(--rose-600);
+    }
+
+    .sync-progress-line {
+      height: 3px;
+      width: 100%;
+      background: transparent;
+      overflow: hidden;
+    }
+    .sync-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--emerald-500), var(--blue-500));
+      transition: width 1s linear;
+    }
+
+    .main-container {
+      max-width: 98%;
+      width: 98%;
+      margin: 18px auto 0;
+      padding: 0 16px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 9px 16px;
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      border: 1px solid transparent;
+      text-decoration: none;
+      user-select: none;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 1px 3px rgba(153, 27, 27, 0.25);
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 2px 6px rgba(153, 27, 27, 0.35);
+    }
+    .btn-secondary {
+      background: white;
+      border-color: var(--slate-300);
+      color: var(--slate-700);
+    }
+    .btn-secondary:hover {
+      background: var(--slate-50);
+      border-color: var(--slate-400);
+      color: var(--slate-900);
+    }
+    .btn-amber {
+      background: var(--slate-800);
+      color: white;
+      border-color: var(--slate-900);
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+    }
+    .btn-amber:hover {
+      background: var(--slate-900);
+      color: white;
+    }
+    .btn-danger {
+      background: var(--rose-600);
+      color: white;
+    }
+    .btn-danger:hover {
+      background: #b91c1c;
+    }
+
+    /* KPI Cards */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .kpi-card {
+      background: white;
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+      border: 1px solid var(--slate-200);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+    .kpi-icon-wrap {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .kpi-val {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--slate-900);
+      line-height: 1.1;
+    }
+    .kpi-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--slate-500);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    /* Vehicles Section */
+    .viaturas-section {
+      margin-bottom: 24px;
+    }
+    .categories-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+    @media (max-width: 1080px) {
+      .categories-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .category-column {
+      background: white;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--slate-200);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .category-header {
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--slate-200);
+      background: var(--slate-50);
+    }
+    .category-header-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--slate-800);
+    }
+    .category-header.resgate { border-left: 4px solid var(--primary); }
+    .category-header.incendio { border-left: 4px solid #7f1d1d; }
+    .category-header.adm { border-left: 4px solid var(--slate-600); }
+
+    .category-count-badge {
+      background: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border: 1px solid var(--slate-200);
+    }
+
+    .viaturas-list-grid {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: 10px;
+      min-height: 100px;
+      max-height: 280px;
+      overflow-y: auto;
+      align-content: start;
+    }
+
+    .viatura-card {
+      background: var(--slate-50);
+      border: 1px solid var(--slate-200);
+      border-radius: var(--radius-md);
+      padding: 8px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.16s ease;
+      text-align: center;
+      user-select: none;
+    }
+    .viatura-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--slate-400);
+      background: white;
+    }
+    .viatura-card.disponivel { border-top: 3px solid var(--emerald-500); }
+    .viatura-card.empenhada { border-top: 3px solid var(--rose-500); background: #fff8f8; }
+    .viatura-card.manutencao { border-top: 3px solid var(--amber-500); background: #fffdf5; }
+
+    .vtr-icon { font-size: 24px; margin-bottom: 4px; }
+    .vtr-icon.disponivel { color: var(--emerald-600); }
+    .vtr-icon.empenhada { color: var(--rose-600); }
+    .vtr-icon.manutencao { color: var(--amber-600); }
+
+    .vtr-name {
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: var(--slate-800);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .vtr-status-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .vtr-status-label.disponivel { color: var(--emerald-600); }
+    .vtr-status-label.empenhada { color: var(--rose-600); }
+    .vtr-status-label.manutencao { color: var(--amber-600); }
+
+    /* Tactical Command Hub Bar */
+    .command-hub-bar {
+      background: white;
+      border: 1px solid var(--slate-200);
+      border-radius: var(--radius-lg);
+      padding: 14px 22px;
+      margin-bottom: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+    }
+    .btn-command {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 22px;
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn-command:active { transform: scale(0.97); }
+    .btn-command-escala {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: white;
+      border-color: #334155;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+    }
+    .btn-command-escala:hover { transform: translateY(-2px); }
+    .btn-command-despacho {
+      background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+      color: white;
+      border-color: #ef4444;
+      box-shadow: 0 4px 18px rgba(185, 28, 28, 0.4);
+    }
+    .btn-command-despacho:hover { transform: translateY(-2px); }
+    .btn-cmd-primary { font-size: 0.95rem; font-weight: 800; letter-spacing: 0.2px; line-height: 1.15; }
+    .btn-cmd-sub { font-size: 0.68rem; font-weight: 600; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* Filter Panel */
+    .filter-panel {
+      background: white;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--slate-200);
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .filter-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .search-box-wrap {
+      flex: 1;
+      min-width: 260px;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-input {
+      width: 100%;
+      padding: 8px 34px 8px 38px;
+      border: 1px solid var(--slate-300);
+      border-radius: var(--radius-md);
+      font-size: 0.85rem;
+      background: var(--slate-50);
+    }
+    .search-input:focus { outline: none; border-color: var(--primary); background: white; }
+    .search-icon { position: absolute; left: 10px; color: var(--slate-400); font-size: 20px; pointer-events: none; }
+
+    .filter-dates-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .date-filter-group { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: var(--slate-500); }
+    .date-input { padding: 6px 10px; border: 1px solid var(--slate-300); border-radius: var(--radius-sm); font-size: 0.8rem; }
+    .filter-chips-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .filter-chip {
+      background: var(--slate-100);
+      border: 1px solid var(--slate-200);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--slate-600);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-chip.active { background: var(--primary); border-color: var(--primary); color: white; }
+
+    /* Modern Table */
+    .table-card {
+      background: white;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--slate-200);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      width: 100%;
+    }
+    .table-wrapper { overflow-x: auto; max-height: 640px; width: 100%; }
+    .modern-table { width: 100%; min-width: 1280px; border-collapse: separate; border-spacing: 0; font-size: 0.82rem; }
+    .modern-table thead th {
+      background: var(--slate-100);
+      color: var(--slate-700);
+      font-weight: 700;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--slate-200);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      white-space: nowrap;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.3px;
+    }
+    .modern-table tbody td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--slate-100);
+      color: var(--slate-700);
+      vertical-align: middle;
+      font-size: 0.82rem;
+    }
+    .modern-table tbody tr:hover td { background: #f8fafc; }
+    .col-wrap-text { white-space: normal; line-height: 1.4; word-break: break-word; }
+
+    .preset-dest-chip {
+      background: var(--slate-100);
+      border: 1px solid var(--slate-200);
+      color: var(--slate-700);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+    .preset-dest-chip:hover { background: var(--slate-200); }
+
+    .equipe-preview-container { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 20px; }
+    .equipe-member-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--slate-100);
+      border: 1px solid var(--slate-300);
+      color: var(--slate-800);
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+
+    .table-filter-row th {
+      background: #f8fafc !important;
+      padding: 6px 6px !important;
+      border-bottom: 2px solid var(--slate-200) !important;
+      position: sticky;
+      top: 36px;
+      z-index: 9;
+    }
+    .col-filter-input {
+      width: 100%;
+      padding: 5px 8px;
+      font-size: 0.72rem;
+      border: 1px solid var(--slate-300);
+      border-radius: 4px;
+      background: white;
+      color: var(--slate-800);
+      font-family: inherit;
+    }
+    .btn-clear-cols {
+      background: var(--slate-200);
+      border: 1px solid var(--slate-300);
+      color: var(--slate-600);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+
+    .table-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .table-status-badge.andamento { background: var(--amber-50); color: var(--amber-600); border: 1px solid #fde68a; }
+    .table-status-badge.ocorrencia { background: #fef2f2; color: #dc2626; border: 1px solid #fecdd3; }
+    .table-status-badge.deslocamento { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+    .table-status-badge.concluido { background: var(--emerald-50); color: var(--emerald-600); border: 1px solid #a7f3d0; }
+    
+    .nav-tabs-container { display: flex; align-items: center; gap: 6px; background: var(--slate-100); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--slate-200); }
+    .nav-tab-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; border: none; background: transparent; color: var(--slate-600); font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+    .nav-tab-btn.active { background: white; color: var(--primary); box-shadow: var(--shadow-sm); }
+
+    .vtr-tag { font-weight: 800; color: var(--primary); background: var(--primary-light); padding: 3px 8px; border-radius: 6px; }
+
+    /* Modais */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(4px);
+      z-index: 99999;
+      overflow-y: auto;
+      padding: 24px 14px;
+    }
+    .modal-dialog {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: var(--shadow-xl);
+      width: 100%;
+      max-width: 860px;
+      margin: 20px auto 40px auto;
+      overflow: hidden;
+      position: relative;
+    }
+    .modal-header {
+      padding: 16px 24px;
+      background: var(--slate-900);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid var(--primary);
+    }
+    .modal-header-title { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .modal-close-btn { background: transparent; border: none; color: rgba(255, 255, 255, 0.75); cursor: pointer; font-size: 26px; }
+    .modal-body { padding: 22px; }
+    .modal-footer {
+      padding: 14px 24px;
+      background: var(--slate-50);
+      border-top: 1px solid var(--slate-200);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* Forms */
+    .form-step-card { background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 16px; }
+    .form-step-title { font-size: 0.8rem; font-weight: 700; color: var(--slate-700); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 680px) { .form-grid-2 { grid-template-columns: 1fr; } }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-label { font-size: 0.78rem; font-weight: 700; color: var(--slate-700); }
+    .form-label .req { color: var(--rose-600); margin-left: 2px; }
+    .form-input { width: 100%; padding: 9px 12px; border: 1px solid var(--slate-300); border-radius: var(--radius-md); font-size: 0.85rem; font-family: inherit; color: var(--slate-800); background: white; }
+    .form-input:focus { outline: none; border-color: var(--primary); }
+    .input-error { border-color: var(--rose-500) !important; background-color: var(--rose-50) !important; }
+    .input-action-row { display: flex; gap: 6px; align-items: stretch; position: relative; }
+    .input-wrapper-clearable { position: relative; flex: 1; display: flex; align-items: center; }
+    .input-wrapper-clearable input { padding-right: 32px; }
+    .btn-clear-inline { position: absolute; right: 6px; background: none; border: none; color: var(--slate-400); cursor: pointer; font-size: 18px; }
+    .btn-picker-addon { background: var(--slate-100); border: 1px solid var(--slate-300); color: var(--slate-700); border-radius: var(--radius-md); padding: 0 10px; font-size: 0.75rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+    .btn-picker-addon.primary { background: var(--primary-light); border-color: #ef9a9a; color: var(--primary); }
+    .saida-panel { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-md); padding: 14px; }
+    .chegada-panel { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: var(--radius-md); padding: 14px; }
+    .distance-indicator { margin-top: 10px; background: white; border-radius: var(--radius-sm); padding: 6px 12px; font-size: 0.8rem; font-weight: 700; color: var(--slate-700); display: inline-flex; align-items: center; gap: 6px; border: 1px dashed var(--slate-300); }
+
+    /* Escala Workspace */
+    .escala-vtr-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+    .escala-vtr-pill { background: white; border: 1.5px solid var(--slate-200); border-radius: var(--radius-md); padding: 8px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; white-space: nowrap; }
+    .escala-vtr-pill.active { background: var(--slate-900); border-color: var(--slate-900); color: white; }
+    .vtr-pill-badge { font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+    .vtr-pill-badge.completa { background: #f0fdf4; color: #166534; }
+    .vtr-pill-badge.vazia { background: #fef2f2; color: #991b1b; }
+    .escala-main-workspace { display: grid; grid-template-columns: 1fr 1.25fr; gap: 18px; }
+    @media (max-width: 860px) { .escala-main-workspace { grid-template-columns: 1fr; } }
+    .role-slot-card { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 14px; }
+    .role-slot-card.condutor { border-left: 4px solid var(--slate-800); }
+    .role-slot-card.guarnicao { border-left: 4px solid var(--primary); }
+    .militar-slot-item { background: white; border: 1.5px solid var(--slate-300); border-radius: var(--radius-sm); padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .slot-empty-placeholder { border: 1.5px dashed var(--slate-300); border-radius: var(--radius-sm); padding: 12px; text-align: center; font-size: 0.78rem; color: var(--slate-500); cursor: pointer; }
+    .escala-roster-column { background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; }
+    .escala-militares-grid { display: flex; flex-direction: column; gap: 8px; max-height: 380px; overflow-y: auto; }
+    .militar-roster-item { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius-sm); padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; }
+    .btn-assign-slot { border: 1px solid var(--slate-300); border-radius: 4px; padding: 4px 8px; font-size: 0.72rem; font-weight: 700; cursor: pointer; background: white; }
+    .btn-assign-slot.active { background: var(--slate-900); color: white; }
+    .btn-assign-slot.socorrista.active { background: var(--primary); color: white; }
+    .escala-resumo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; max-height: 220px; overflow-y: auto; }
+    .escala-resumo-card { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; }
+
+    /* Estatísticas & Gráficos */
+    .stat-filters-panel { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 20px; }
+    .stat-filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+    .stat-chart-card { background: white; border: 1px solid var(--slate-200); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 24px; position: relative; }
+    .stat-chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--slate-100); flex-wrap: wrap; gap: 12px; }
+    .stat-toggle-group { display: inline-flex; align-items: center; gap: 4px; background: var(--slate-100); padding: 3px; border-radius: 8px; }
+    .stat-toggle-btn { padding: 6px 12px; font-size: 0.75rem; font-weight: 700; border-radius: 6px; border: none; background: transparent; color: var(--slate-600); cursor: pointer; }
+    .stat-toggle-btn.active { background: white; color: var(--primary); box-shadow: var(--shadow-sm); }
+    .toast-box { background: white; border-radius: 16px; padding: 28px 24px; text-align: center; max-width: 380px; width: 90%; margin: 80px auto; box-shadow: var(--shadow-xl); }
+    .toast-icon { font-size: 50px; color: var(--emerald-500); margin-bottom: 10px; }
+    .spinner-sm { width: 16px; height: 16px; border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== TELA DE LOGIN ==================== -->
+  <div id="tela-login">
+    <div class="login-container">
+      <div class="login-logo-wrap">
+        <img src="https://i.imgur.com/6K44gs7.png" alt="Logo CBMGO" onerror="this.style.display='none'">
+      </div>
+      
+      <h2 class="login-title">
+        <span class="material-symbols-outlined" style="color: var(--primary); font-size: 28px;">local_fire_department</span>
+        SICOVI
+      </h2>
+      <div class="login-subtitle">Controle Operacional de Viaturas &bull; CBMGO</div>
+      
+      <form id="formLogin" onsubmit="handleLoginSubmit(event)">
+        <div class="login-form-group">
+          <label for="login-usuario" class="login-form-label">Militar / Operador</label>
+          <div class="login-input-wrap">
+            <span class="material-symbols-outlined login-input-icon">person</span>
+            <input type="text" class="login-form-control" id="login-usuario" list="operadoresCadastrados" placeholder="Selecione ou digite seu nome" required autocomplete="off" autofocus>
+            <button type="button" onclick="document.getElementById('login-usuario').value=''; document.getElementById('login-usuario').focus();" title="Limpar nome" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer;">&times;</button>
+          </div>
+          <datalist id="operadoresCadastrados"></datalist>
+        </div>
+
+        <div class="login-form-group">
+          <label for="login-senha" class="login-form-label">Senha de Acesso</label>
+          <div class="login-input-wrap">
+            <span class="material-symbols-outlined login-input-icon">lock</span>
+            <input type="password" class="login-form-control" id="login-senha" placeholder="••••••••" required style="padding-right: 40px;">
+            <button type="button" class="login-btn-toggle-pass" onclick="toggleSenhaLoginVisivel()" title="Mostrar/ocultar senha">
+              <span class="material-symbols-outlined" id="icon-toggle-login-pass" style="font-size: 20px;">visibility</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="login-remember-row">
+          <label class="login-checkbox-label">
+            <input type="checkbox" id="login-lembrar" checked>
+            <span>Lembrar meu usuário</span>
+          </label>
+          <button type="button" class="btn-link-mudar-senha" onclick="abrirModalAlterarSenha(document.getElementById('login-usuario').value)">
+            Mudar minha senha
+          </button>
+        </div>
+
+        <button type="submit" id="btnLoginSubmit" class="login-btn-submit">
+          <span class="material-symbols-outlined">login</span>
+          <span id="txtBtnLogin">ACESSAR SISTEMA</span>
+        </button>
+      </form>
+
+      <div class="login-footer-text">
+        Corpo de Bombeiros Militar do Estado de Goiás
+      </div>
+    </div>
+
+    <!-- Modal de Erro de Login -->
+    <div id="modalErroLogin" class="modal-erro-login">
+      <div class="modal-erro-login-content">
+        <div class="modal-erro-login-icon">
+          <span class="material-symbols-outlined" style="font-size: 50px;">cancel</span>
+        </div>
+        <h3 style="color: #1e293b; font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">Acesso Negado</h3>
+        <p id="mensagemErroLogin" style="color: #64748b; font-size: 0.85rem; line-height: 1.4;">Usuário ou senha incorretos!</p>
+        <button type="button" class="btn-fechar-erro-login" onclick="fecharModalErroLogin()">TENTAR NOVAMENTE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TELA PRINCIPAL (DASHBOARD) ==================== -->
+  <div id="tela-principal">
+
+    <!-- Top Header Navigation -->
+    <header class="top-header">
+      <div class="header-inner">
+        <div class="brand-section">
+          <img src="https://i.imgur.com/6K44gs7.png" alt="CBMGO" class="brand-logo" onerror="this.style.display='none'">
+          <div class="brand-titles">
+            <div class="brand-title">
+              <span class="material-symbols-outlined" style="font-size: 26px;">local_fire_department</span>
+              SICOVI
+            </div>
+            <div class="brand-subtitle">Controle Operacional de Viaturas &bull; CBMGO</div>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs-container">
+          <button type="button" id="tab-btn-operacional" class="nav-tab-btn active" onclick="alternarAbaPrincipal('operacional')">
+            <span class="material-symbols-outlined" style="font-size: 18px;">dashboard</span>
+            <span>Despacho &amp; Registros</span>
+          </button>
+          <button type="button" id="tab-btn-estatisticas" class="nav-tab-btn" onclick="alternarAbaPrincipal('estatisticas')">
+            <span class="material-symbols-outlined" style="font-size: 18px;">analytics</span>
+            <span>Totais &amp; Evolução KM</span>
+          </button>
+        </div>
+
+        <div class="header-actions">
+          <!-- Live Sync Pill -->
+          <div class="sync-badge" title="Status da sincronização com o banco de dados">
+            <div id="sync-dot" class="sync-dot"></div>
+            <span id="sync-text">Sincronizado</span>
+          </div>
+
+          <!-- Operator Badge -->
+          <div class="operator-card">
+            <div class="operator-avatar" id="avatar-char">O</div>
+            <div class="operator-info">
+              <span class="operator-label">Operador</span>
+              <span class="operator-name" id="nome-operador">Operador</span>
+            </div>
+            <button onclick="abrirModalAlterarSenha(getOperadorAtual())" class="btn-header-action" title="Alterar minha senha">
+              <span class="material-symbols-outlined" style="font-size: 18px;">key</span>
+            </button>
+            <button onclick="fazerLogout()" class="btn-header-action btn-logout" title="Encerrar Sessão">
+              <span class="material-symbols-outlined" style="font-size: 18px;">logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="sync-progress-line">
+        <div id="refresh-progress-bar" class="sync-progress-fill"></div>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+
+      <!-- ABA OPERACIONAL (DESPACHO & REGISTROS) -->
+      <div id="view-operacional">
+
+        <!-- KPI Summary Row -->
+        <div class="kpi-row">
+          <div class="kpi-card">
+            <div class="kpi-icon-wrap" style="background: #f0fdf4; color: #166534;">
+              <span class="material-symbols-outlined">check_circle</span>
+            </div>
+            <div>
+              <div class="kpi-val" id="kpi-disponiveis">0</div>
+              <div class="kpi-label">Viaturas Disponíveis</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-wrap" style="background: #fef2f2; color: #991b1b;">
+              <span class="material-symbols-outlined">emergency_share</span>
+            </div>
+            <div>
+              <div class="kpi-val" id="kpi-empenhadas">0</div>
+              <div class="kpi-label">Em Ocorrência / Rua</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-wrap" style="background: var(--slate-100); color: var(--slate-700);">
+              <span class="material-symbols-outlined">route</span>
+            </div>
+            <div>
+              <div class="kpi-val" id="kpi-total-saidas">0</div>
+              <div class="kpi-label">Número de Saídas</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-wrap" style="background: #fef2f2; color: #991b1b;">
+              <span class="material-symbols-outlined">local_fire_department</span>
+            </div>
+            <div>
+              <div class="kpi-val" id="kpi-total-ocorrencias" style="color: #991b1b;">0</div>
+              <div class="kpi-label">Número de Ocorrências</div>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-wrap" style="background: var(--slate-100); color: var(--slate-700);">
+              <span class="material-symbols-outlined">speed</span>
+            </div>
+            <div>
+              <div class="kpi-val" id="kpi-km-total">0 km</div>
+              <div class="kpi-label">KM Rodados (Período)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Frota Operacional -->
+        <section class="viaturas-section">
+          <div class="categories-grid">
+            <div class="category-column">
+              <div class="category-header resgate">
+                <div class="category-header-title">
+                  <span class="material-symbols-outlined">airport_shuttle</span>
+                  Resgate (UR / APH)
+                </div>
+                <span id="count-resgate" style="font-size:0.75rem; font-weight:700;">0 Vtrs</span>
+              </div>
+              <div id="resgate-viaturas" class="viaturas-list-grid"></div>
+            </div>
+
+            <div class="category-column">
+              <div class="category-header incendio">
+                <div class="category-header-title">
+                  <span class="material-symbols-outlined">fire_truck</span>
+                  Incêndio &amp; Salvamento (ABT / ABS)
+                </div>
+                <span id="count-incendio" style="font-size:0.75rem; font-weight:700;">0 Vtrs</span>
+              </div>
+              <div id="incendio-viaturas" class="viaturas-list-grid"></div>
+            </div>
+
+            <div class="category-column">
+              <div class="category-header adm">
+                <div class="category-header-title">
+                  <span class="material-symbols-outlined">minor_crash</span>
+                  Apoio &amp; Administrativas (ASA / ADM)
+                </div>
+                <span id="count-adm" style="font-size:0.75rem; font-weight:700;">0 Vtrs</span>
+              </div>
+              <div id="adm-viaturas" class="viaturas-list-grid"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Painel de Comando Tático -->
+        <div class="command-hub-bar">
+          <button type="button" onclick="abrirModalEscala()" class="btn-command btn-command-escala">
+            <span class="material-symbols-outlined" style="font-size: 24px; color: #f59e0b;">badge</span>
+            <div style="display: flex; flex-direction: column; text-align: left;">
+              <span class="btn-cmd-primary">Escalar Equipes</span>
+              <span class="btn-cmd-sub">Guarnições do Plantão</span>
+            </div>
+          </button>
+
+          <button type="button" onclick="registrarNovaSaida()" class="btn-command btn-command-despacho">
+            <span class="material-symbols-outlined" style="font-size: 24px;">add_circle</span>
+            <div style="display: flex; flex-direction: column; text-align: left;">
+              <span class="btn-cmd-primary">Novo Despacho</span>
+              <span class="btn-cmd-sub">Registrar Saída de Viatura</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- Filter Toolbar -->
+        <div class="filter-panel">
+          <div class="filter-row-top">
+            <div class="search-box-wrap">
+              <span class="material-symbols-outlined search-icon">search</span>
+              <input type="text" id="filtro-busca-geral" class="search-input" placeholder="Pesquisar por viatura, condutor, destino, RAI ou operador..." oninput="filtrarTabela()">
+            </div>
+
+            <div class="filter-dates-wrap">
+              <div class="date-filter-group">
+                <span>De:</span>
+                <input type="datetime-local" id="filtro-rel-inicio" class="date-input" onchange="filtrarTabela()">
+              </div>
+              <div class="date-filter-group">
+                <span>Até:</span>
+                <input type="datetime-local" id="filtro-rel-fim" class="date-input" onchange="filtrarTabela()">
+              </div>
+              <button type="button" onclick="gerarPDFViaturas()" class="btn btn-secondary">
+                <span class="material-symbols-outlined" style="color: #b91c1c; font-size: 18px;">picture_as_pdf</span> Gerar PDF
+              </button>
+              <button type="button" onclick="exportarCSV()" class="btn btn-secondary">
+                <span class="material-symbols-outlined" style="color: #059669; font-size: 18px;">table_view</span> CSV
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-chips-row">
+            <span style="font-size: 0.72rem; font-weight: 700; color: var(--slate-400); text-transform: uppercase;">Atalhos:</span>
+            <button type="button" class="filter-chip active" id="chip-24h" onclick="aplicarPresetData('24h')">Últimas 24 Horas</button>
+            <button type="button" class="filter-chip" id="chip-hoje" onclick="aplicarPresetData('hoje')">Hoje</button>
+            <button type="button" class="filter-chip" id="chip-7d" onclick="aplicarPresetData('7d')">Últimos 7 Dias</button>
+            <button type="button" class="filter-chip" id="chip-tudo" onclick="aplicarPresetData('tudo')">Todo o Histórico</button>
+            <div style="flex: 1;"></div>
+            <button type="button" class="filter-chip" id="chip-status-em-aberto" onclick="alternarFiltroEmAberto()">
+              <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">schedule</span> Apenas Em Aberto (Sem Retorno)
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabela -->
+        <div class="table-card">
+          <div class="table-wrapper">
+            <table id="tabela" class="modern-table">
+              <thead>
+                <tr>
+                  <th style="width: 70px;">ID</th>
+                  <th style="width: 100px;">Viatura</th>
+                  <th style="min-width: 130px;">Condutor</th>
+                  <th style="min-width: 180px;">Equipe</th>
+                  <th style="min-width: 150px;">Destino</th>
+                  <th style="min-width: 110px;">Bairro</th>
+                  <th style="width: 90px;">RAI</th>
+                  <th style="min-width: 130px;">Natureza</th>
+                  <th style="width: 110px;">Saída</th>
+                  <th style="width: 75px;">Km Saída</th>
+                  <th style="width: 110px;">Chegada</th>
+                  <th style="width: 75px;">Km Cheg.</th>
+                  <th style="width: 75px;">KM Rod.</th>
+                  <th style="width: 90px;">Op.</th>
+                  <th style="width: 90px; text-align: center;">Ações</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th><input type="text" id="filtro-col-id" class="col-filter-input" placeholder="ID..." oninput="filtrarTabela()"></th>
+                  <th><input type="text" id="filtro-col-viatura" class="col-filter-input" placeholder="Vtr..." oninput="filtrarTabela()"></th>
+                  <th><input type="text" id="filtro-col-condutor" class="col-filter-input" placeholder="Condutor..." oninput="filtrarTabela()"></th>
+                  <th><input type="text" id="filtro-col-equipe" class="col-filter-input" placeholder="Equipe..." oninput="filtrarTabela()"></th>
+                  <th><input type="text" id="filtro-col-destino" class="col-filter-input" placeholder="Destino..." oninput="filtrarTabela()"></th>
+                  <th><input type="text" id="filtro-col-bairro" class="col-filter-input" placeholder="Bairro..." oninput="filtrarTabela()"></th>
+                  <th><input type="text" id="filtro-col-rai" class="col-filter-input" placeholder="RAI..." oninput="filtrarTabela()"></th>
+                  <th><input type="text" id="filtro-col-natureza" class="col-filter-input" placeholder="Natureza..." oninput="filtrarTabela()"></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th><input type="text" id="filtro-col-operador" class="col-filter-input" placeholder="Op..." oninput="filtrarTabela()"></th>
+                  <th style="text-align: center;">
+                    <button type="button" onclick="limparFiltrosColunas()" class="btn-clear-cols" title="Limpar filtros">
+                      <span class="material-symbols-outlined" style="font-size: 15px;">filter_alt_off</span>
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="tabela-tbody">
+                <tr><td colspan="15" style="text-align: center; padding: 40px; color: var(--slate-400);">Carregando registros...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-pagination" style="padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; background: var(--slate-50); border-top: 1px solid var(--slate-200);">
+            <div id="infoPaginacao" style="font-size: 0.8rem; color: var(--slate-600);">Exibindo 0 registros</div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button type="button" id="btnAnterior" class="btn btn-secondary" onclick="mudarPagina(-1)">&larr; Anterior</button>
+              <span id="label-num-pagina" style="font-size: 0.8rem; font-weight: 700;">Página 1</span>
+              <button type="button" id="btnProximo" class="btn btn-secondary" onclick="mudarPagina(1)">Próximo &rarr;</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ABA DE ESTATÍSTICAS -->
+      <div id="view-estatisticas" style="display: none;">
+        <div class="stat-filters-panel">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--slate-100); flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="material-symbols-outlined" style="color: var(--primary);">filter_alt</span>
+              <strong style="color: var(--slate-800); font-size: 0.9rem;">Filtros de Análise &amp; Deslocamentos</strong>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button type="button" id="btn-stat-atualizar-bd" onclick="carregarTudoEmBatch()" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.78rem;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">sync</span> Atualizar com o BD
+              </button>
+              <button type="button" onclick="limparFiltrosEstatisticas()" class="btn-clear-cols" style="padding: 6px 12px; font-weight: 700;">
+                Limpar Filtros
+              </button>
+            </div>
+          </div>
+
+          <div class="stat-filters-grid">
+            <div class="form-group"><label class="form-label" for="filtro-stat-data-inicio">Data Inicial</label><input type="date" id="filtro-stat-data-inicio" class="form-input" onchange="aplicarFiltrosEstatisticas()"></div>
+            <div class="form-group"><label class="form-label" for="filtro-stat-data-fim">Data Final</label><input type="date" id="filtro-stat-data-fim" class="form-input" onchange="aplicarFiltrosEstatisticas()"></div>
+            <div class="form-group"><label class="form-label" for="filtro-stat-ano">Ano</label><select id="filtro-stat-ano" class="form-input" onchange="aplicarFiltrosEstatisticas()"><option value="">Todos os anos</option></select></div>
+            <div class="form-group"><label class="form-label" for="filtro-stat-mes">Mês</label><select id="filtro-stat-mes" class="form-input" onchange="aplicarFiltrosEstatisticas()"><option value="">Todos os meses</option></select></div>
+            <div class="form-group"><label class="form-label" for="filtro-stat-viatura">Viatura</label><select id="filtro-stat-viatura" class="form-input" onchange="aplicarFiltrosEstatisticas()"><option value="">Todas as viaturas</option></select></div>
+            <div class="form-group"><label class="form-label" for="filtro-stat-categoria">Categoria</label><select id="filtro-stat-categoria" class="form-input" onchange="aplicarFiltrosEstatisticas()"><option value="">Todas</option><option value="RESGATE">Resgate</option><option value="INCENDIO">Incêndio</option><option value="ADM">Apoio</option></select></div>
+          </div>
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi-card"><div class="kpi-val" id="stat-kpi-deslocamentos">0</div><div class="kpi-label">Deslocamentos Totais</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="stat-kpi-km-total">0 km</div><div class="kpi-label">KM Rodados Totais</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="stat-kpi-media-km">0 km</div><div class="kpi-label">Média por Saída</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="stat-kpi-ocorrencias">0</div><div class="kpi-label">Em Ocorrência</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="stat-kpi-viaturas-ativas">0</div><div class="kpi-label">Viaturas Utilizadas</div></div>
+        </div>
+
+        <div class="stat-chart-card">
+          <div class="stat-chart-header">
+            <div style="font-weight: 700; color: var(--slate-800);">Evolução do KM da Viatura ao Longo do Tempo</div>
+            <div class="stat-toggle-group">
+              <button type="button" id="btn-toggle-km-registrado" class="stat-toggle-btn active" onclick="setModoGraficoKm('registrado')">KM Registrado</button>
+              <button type="button" id="btn-toggle-km-rodado" class="stat-toggle-btn" onclick="setModoGraficoKm('rodado')">KM Rodado</button>
+            </div>
+          </div>
+          <div id="stat-chart-container" style="width: 100%; min-height: 260px; overflow-x: auto;"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ==================== MODAL ALTERAR SENHA ==================== -->
+  <div id="modalAlterarSenha" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-header-title">
+          <span class="material-symbols-outlined" style="color: #ef4444;">key</span>
+          <span>Alterar Senha do Operador</span>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="fecharModalAlterarSenha()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="formAlterarSenha" onsubmit="handleSalvarNovaSenha(event)">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label">Militar / Operador</label>
+            <input type="text" id="alt-senha-usuario" class="form-input" required readonly style="background: var(--slate-100); font-weight: 700;">
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label">Senha Atual <span class="req">*</span></label>
+            <input type="password" id="alt-senha-atual" class="form-input" placeholder="••••••••" required>
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label">Nova Senha <span class="req">*</span></label>
+            <input type="password" id="alt-senha-nova" class="form-input" placeholder="••••••••" required>
+          </div>
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label">Confirmar Nova Senha <span class="req">*</span></label>
+            <input type="password" id="alt-senha-confirmar" class="form-input" placeholder="••••••••" required>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button type="button" class="btn btn-secondary" onclick="fecharModalAlterarSenha()">Cancelar</button>
+            <button type="submit" id="btnSalvarNovaSenha" class="btn btn-primary">Gravar Nova Senha</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE DESPACHO ==================== -->
+  <div id="modalDespacho" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-header-title">
+          <span class="material-symbols-outlined">emergency_share</span>
+          <span id="modal-despacho-title">Despacho / Deslocamento de Viatura</span>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="fecharModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="formulario" onsubmit="event.preventDefault(); salvar();">
+          <input type="hidden" id="id" value="PENDENTE">
+          <div class="form-step-card">
+            <div class="form-step-title">1. Identificação da Viatura e Guarnição</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Viatura <span class="req">*</span></label>
+                <div class="input-action-row">
+                  <input type="text" id="viatura" class="form-input" list="listaViaturas" onchange="preencherCamposPorViatura()" placeholder="Ex: UR-123" required>
+                  <button type="button" class="btn-picker-addon primary" onclick="abrirSeletorViaturas('viatura')">Buscar</button>
+                </div>
+                <datalist id="listaViaturas"></datalist>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Condutor <span class="req">*</span></label>
+                <div class="input-action-row">
+                  <input type="text" id="condutor" class="form-input" list="listaCondutores" placeholder="Nome do condutor..." required>
+                  <button type="button" class="btn-picker-addon" onclick="abrirSeletorMilitares('condutor')">Buscar</button>
+                </div>
+                <datalist id="listaCondutores"></datalist>
+              </div>
+            </div>
+            <div class="form-group" style="margin-top: 10px;">
+              <label class="form-label">Equipe / Guarnição</label>
+              <div class="input-action-row">
+                <input type="text" id="equipe" class="form-input" oninput="atualizarPreviewEquipe()" placeholder="Ex: Cb Costa, Sd Souza...">
+                <button type="button" class="btn-picker-addon" onclick="abrirSeletorMilitares('equipe')">Montar Guarnição</button>
+              </div>
+              <div id="equipe-preview-tags" class="equipe-preview-container"></div>
+            </div>
+          </div>
+
+          <div class="form-step-card">
+            <div class="form-step-title">2. Destino e Ocorrência</div>
+            <div style="display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap;">
+              <button type="button" class="preset-dest-chip" onclick="document.getElementById('destino').value='Ocorrência'">🚨 Ocorrência</button>
+              <button type="button" class="preset-dest-chip" onclick="document.getElementById('destino').value='QRF'">⚡ QRF</button>
+              <button type="button" class="preset-dest-chip" onclick="document.getElementById('destino').value='Abastecimento'">⛽ Abastecimento</button>
+              <button type="button" class="preset-dest-chip" onclick="document.getElementById('destino').value='A serviço da OBM'">🏢 A serviço da OBM</button>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Destino <span class="req">*</span></label>
+                <input type="text" id="destino" class="form-input" list="listaDestinos" placeholder="Local..." required>
+                <datalist id="listaDestinos"></datalist>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Bairro</label>
+                <input type="text" id="bairro" class="form-input" list="lista-bairros" placeholder="Bairro...">
+                <datalist id="lista-bairros"></datalist>
+              </div>
+            </div>
+            <div class="form-grid-2" style="margin-top: 10px;">
+              <div class="form-group">
+                <label class="form-label">Natureza</label>
+                <input type="text" id="natureza" class="form-input" placeholder="Natureza da ocorrência...">
+              </div>
+              <div class="form-group">
+                <label class="form-label">RAI</label>
+                <input type="text" id="rai" class="form-input" placeholder="Ex: 2026-123456">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="saida-panel">
+              <div style="font-weight: 700; color: #1e40af; font-size: 0.8rem; margin-bottom: 8px;">Saída Operacional</div>
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label class="form-label">Data e Hora de Saída <span class="req">*</span></label>
+                <input type="datetime-local" id="saida" class="form-input" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">KM Saída <span class="req">*</span></label>
+                <input type="number" id="kmSaida" class="form-input" oninput="calcularDistanciaAoDigitar()" required>
+              </div>
+            </div>
+
+            <div class="chegada-panel">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-weight: 700; color: #065f46; font-size: 0.8rem;">Retorno / Chegada</div>
+                <button type="button" onclick="definirHoraChegadaAgora()" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.7rem;">Preencher Agora</button>
+              </div>
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label class="form-label">Data e Hora de Chegada</label>
+                <input type="datetime-local" id="chegada" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">KM Chegada</label>
+                <input type="number" id="kmChegada" class="form-input" oninput="calcularDistanciaAoDigitar()">
+              </div>
+            </div>
+          </div>
+
+          <div id="indicador-distancia" class="distance-indicator" style="display: none;">
+            Distância percorrida: <strong id="valor-km-calculado">0</strong> km
+          </div>
+
+          <div class="modal-footer" style="margin-top: 20px;">
+            <div style="font-size: 0.8rem; color: var(--slate-600);">Operador: <strong id="operador-display">Operador</strong><input type="hidden" id="operador"></div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+              <button type="submit" id="btnSalvar" class="btn btn-primary">Salvar no Banco de Dados</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL SELETOR DE MILITARES ==================== -->
+  <div id="modalSeletorMilitares" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 760px;">
+      <div class="modal-header">
+        <div class="modal-header-title">Selecionar Militares</div>
+        <button type="button" class="modal-close-btn" onclick="fecharSeletorMilitares()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="busca-militar-input" class="search-input" placeholder="Buscar militar..." oninput="filtrarListaMilitaresModal()">
+          <button type="button" class="btn btn-secondary" onclick="abrirModalCadastroMilitar()">+ Cadastrar</button>
+        </div>
+        <div id="grid-militares-seletor" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; max-height: 320px; overflow-y: auto;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="fecharSeletorMilitares()">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="confirmarSelecaoMilitares()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL SELETOR DE VIATURAS ==================== -->
+  <div id="modalSeletorViaturas" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="modal-header">
+        <div class="modal-header-title">Selecionar Viatura da Frota</div>
+        <button type="button" class="modal-close-btn" onclick="fecharSeletorViaturas()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="busca-viatura-input" class="search-input" placeholder="Buscar viatura..." oninput="filtrarListaViaturasModal()" style="margin-bottom: 14px;">
+        <div id="grid-viaturas-seletor" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; max-height: 320px; overflow-y: auto;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="fecharSeletorViaturas()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE ESCALAS ==================== -->
+  <div id="modalEscala" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 980px;">
+      <div class="modal-header">
+        <div class="modal-header-title">Escala de Guarnições</div>
+        <button type="button" class="modal-close-btn" onclick="fecharModalEscala()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="escala-viaturas-pill-strip" class="escala-vtr-strip" style="margin-bottom: 16px;"></div>
+        <div class="escala-main-workspace">
+          <div>
+            <div style="font-weight: 800; font-size: 1.1rem; margin-bottom: 8px;" id="escala-vtr-nome-display">Viatura</div>
+            <div class="role-slot-card condutor">
+              <div style="font-weight: 700; font-size: 0.8rem; margin-bottom: 6px;">Condutor:</div>
+              <div id="slot-condutor-body"></div>
+            </div>
+            <div class="role-slot-card guarnicao">
+              <div style="font-weight: 700; font-size: 0.8rem; margin-bottom: 6px;">Guarnição:</div>
+              <div id="slot-guarnicao-body"></div>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="salvarEscala()" style="width: 100%; margin-top: 10px;">Gravar Escala no BD</button>
+          </div>
+          <div class="escala-roster-column">
+            <input type="text" id="escala-militar-busca" class="search-input" placeholder="Buscar militar..." oninput="filtrarMilitaresEscala()" style="margin-bottom: 10px;">
+            <div id="escala-militares-disponiveis" class="escala-militares-grid"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL CADASTRO MILITAR ==================== -->
+  <div id="modalCadastroMilitar" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-header-title">Cadastrar Militar na Planilha</div>
+        <button type="button" class="modal-close-btn" onclick="fecharModalCadastroMilitar()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="inputNovoMilitarNome" class="form-input" placeholder="Ex: Cb Costa..." style="margin-bottom: 14px;">
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" class="btn btn-secondary" onclick="fecharModalCadastroMilitar()">Cancelar</button>
+          <button type="button" class="btn btn-primary" onclick="executarCadastroMilitar()">Cadastrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden logo for jsPDF -->
+  <img id="logo-relatorio" src="https://i.imgur.com/6K44gs7.png" style="display: none;" crossorigin="anonymous">
+
+  <!-- ==================== SCRIPT INTEGRADO ==================== -->
+  <script>
+    /*OPERADOR_INICIAL*/
+
+    let dadosTabela = [];
+    let dadosFiltrados = [];
+    let viaturasStatusMap = [];
+    let viaturasLista = [];
+    let escalasMemoria = [];
+    let listaMilitaresCadastrados = [];
+    let paginaAtual = 1;
+    const registrosPorPagina = 40;
+    let intervalRefresh = null;
+    let filtroApenasEmAberto = false;
+    let escalaViaturaAtiva = "";
+    let escalaCondutorAtivo = "";
+    let escalaCombatentesAtivos = [];
+    let seletorMilitaresTargetField = null;
+    let militaresSelecionadosModal = [];
+    let seletorViaturaTargetField = null;
+
+    function getOperadorAtual() {
+      if (window.operadorInjetado && String(window.operadorInjetado).trim() !== "") {
+        return String(window.operadorInjetado).trim();
+      }
+      try {
+        const s = sessionStorage.getItem("operadorLogado");
+        if (s && s.trim() !== "") return s.trim();
+        const l = localStorage.getItem("operadorLogado");
+        if (l && l.trim() !== "") return l.trim();
+      } catch(e) {}
+      return null;
+    }
+
+    // Atualiza sempre o filtro "Até" para a data e hora atual a cada sincronização
+    function atualizarDataFimParaAgora() {
+      const agora = new Date();
+      const fusoAgora = new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      const elFim = document.getElementById("filtro-rel-fim");
+      if (elFim) elFim.value = fusoAgora;
+    }
+
+    function aplicarPresetData(tipo) {
+      document.querySelectorAll(".filter-chip").forEach(c => {
+        if (c.id !== "chip-status-em-aberto") c.classList.remove("active");
+      });
+
+      const agora = new Date();
+      const fusoAgora = new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      let inicio = "";
+
+      if (tipo === '24h') {
+        const d = new Date(agora.getTime() - 24 * 60 * 60 * 1000);
+        inicio = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById("chip-24h")?.classList.add("active");
+      } else if (tipo === 'hoje') {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        inicio = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById("chip-hoje")?.classList.add("active");
+      } else if (tipo === '7d') {
+        const d = new Date(agora.getTime() - 7 * 24 * 60 * 60 * 1000);
+        inicio = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById("chip-7d")?.classList.add("active");
+      } else if (tipo === 'tudo') {
+        inicio = "";
+        document.getElementById("chip-tudo")?.classList.add("active");
+      }
+
+      document.getElementById("filtro-rel-inicio").value = inicio;
+      document.getElementById("filtro-rel-fim").value = fusoAgora;
+      filtrarTabela();
+    }
+
+    function verificarSessaoEIniciar() {
+      const op = getOperadorAtual();
+      if (op) {
+        exibirDashboard(op);
+      } else {
+        exibirTelaLogin();
+      }
+    }
+
+    function exibirTelaLogin() {
+      document.getElementById("tela-principal").style.display = "none";
+      document.getElementById("tela-login").style.display = "flex";
+
+      const lembrado = localStorage.getItem("ultimoOperador");
+      if (lembrado) {
+        const c = document.getElementById("login-usuario");
+        if (c) c.value = lembrado;
+      }
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(function(lista) {
+          const dl = document.getElementById('operadoresCadastrados');
+          if (lista && dl) {
+            dl.innerHTML = "";
+            lista.forEach(nome => {
+              if (!nome) return;
+              let opt = document.createElement('option');
+              opt.value = nome;
+              dl.appendChild(opt);
+            });
+          }
+        }).getListaOperadores();
+      }
+    }
+
+    function exibirDashboard(nomeOperador) {
+      document.getElementById("tela-login").style.display = "none";
+      document.getElementById("tela-principal").style.display = "block";
+
+      document.getElementById("nome-operador").textContent = nomeOperador;
+      document.getElementById("avatar-char").textContent = (nomeOperador.charAt(0) || "O").toUpperCase();
+      document.getElementById("operador").value = nomeOperador;
+      document.getElementById("operador-display").textContent = nomeOperador;
+
+      aplicarPresetData('24h');
+      carregarTudoEmBatch();
+      iniciarAutoRefresh();
+    }
+
+    function toggleSenhaLoginVisivel() {
+      const inp = document.getElementById("login-senha");
+      const icon = document.getElementById("icon-toggle-login-pass");
+      if (inp.type === "password") {
+        inp.type = "text";
+        icon.textContent = "visibility_off";
+      } else {
+        inp.type = "password";
+        icon.textContent = "visibility";
+      }
+    }
+
+    function abrirModalAlterarSenha(usuarioSugerido) {
+      const u = usuarioSugerido || getOperadorAtual() || document.getElementById("login-usuario")?.value || "";
+      document.getElementById("alt-senha-usuario").value = u;
+      document.getElementById("alt-senha-atual").value = "";
+      document.getElementById("alt-senha-nova").value = "";
+      document.getElementById("alt-senha-confirmar").value = "";
+      document.getElementById("modalAlterarSenha").style.display = "block";
+    }
+
+    function fecharModalAlterarSenha() {
+      document.getElementById("modalAlterarSenha").style.display = "none";
+    }
+
+    function handleSalvarNovaSenha(e) {
+      e.preventDefault();
+      const u = document.getElementById("alt-senha-usuario").value;
+      const sa = document.getElementById("alt-senha-atual").value;
+      const sn = document.getElementById("alt-senha-nova").value;
+      const sc = document.getElementById("alt-senha-confirmar").value;
+
+      if (!sa || !sn) {
+        alert("Preencha todas as senhas.");
+        return;
+      }
+      if (sn.length < 4) {
+        alert("A nova senha deve possuir no mínimo 4 caracteres.");
+        return;
+      }
+      if (sn !== sc) {
+        alert("A confirmação da nova senha não confere.");
+        return;
+      }
+
+      const btn = document.getElementById("btnSalvarNovaSenha");
+      btn.disabled = true;
+      btn.textContent = "Gravando...";
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            btn.disabled = false;
+            btn.textContent = "Gravar Nova Senha";
+            if (res && res.success) {
+              alert(res.mensagem || "Senha alterada com sucesso!");
+              fecharModalAlterarSenha();
+            } else {
+              alert((res && res.mensagem) || "Erro ao alterar senha.");
+            }
+          })
+          .withFailureHandler(function(err) {
+            btn.disabled = false;
+            btn.textContent = "Gravar Nova Senha";
+            alert("Erro: " + (err.message || err));
+          })
+          .alterarSenha(u, sa, sn);
+      } else {
+        setTimeout(function() {
+          btn.disabled = false;
+          btn.textContent = "Gravar Nova Senha";
+          alert("Senha alterada com sucesso!");
+          fecharModalAlterarSenha();
+        }, 300);
+      }
+    }
+
+    function handleLoginSubmit(event) {
+      event.preventDefault();
+      const operador = (document.getElementById("login-usuario").value || "").trim();
+      const senha = (document.getElementById("login-senha").value || "").trim();
+      const lembrar = document.getElementById("login-lembrar").checked;
+
+      if (!operador || !senha) return;
+
+      if (lembrar) {
+        try { localStorage.setItem("ultimoOperador", operador); } catch(e){}
+      }
+
+      const btn = document.getElementById("btnLoginSubmit");
+      btn.disabled = true;
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            btn.disabled = false;
+            if (res && res.success) {
+              sessionStorage.setItem("operadorLogado", res.usuario || operador);
+              exibirDashboard(res.usuario || operador);
+            } else {
+              document.getElementById("mensagemErroLogin").textContent = (res && res.mensagem) || "Usuário ou senha incorretos!";
+              document.getElementById("modalErroLogin").style.display = "flex";
+            }
+          })
+          .withFailureHandler(function(err) {
+            btn.disabled = false;
+            alert("Erro ao validar login: " + err.message);
+          })
+          .verificarLogin(operador, senha);
+      } else {
+        sessionStorage.setItem("operadorLogado", operador);
+        exibirDashboard(operador);
+      }
+    }
+
+    function fecharModalErroLogin() {
+      document.getElementById("modalErroLogin").style.display = "none";
+      const s = document.getElementById("login-senha");
+      if (s) { s.value = ""; s.focus(); }
+    }
+
+    function fazerLogout() {
+      sessionStorage.removeItem("operadorLogado");
+      exibirTelaLogin();
+    }
+
+    function carregarTudoEmBatch() {
+      atualizarDataFimParaAgora();
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(function(res) {
+          if (res && res.success) {
+            if (res.viaturasStatus) exibirViaturas(res.viaturasStatus);
+            if (res.viaturasLista) {
+              viaturasLista = res.viaturasLista;
+              popularDatalist("listaViaturas", res.viaturasLista);
+            }
+            if (res.militares) {
+              listaMilitaresCadastrados = res.militares;
+              popularDatalist("listaCondutores", res.militares);
+            }
+            if (res.bairros) popularDatalist("lista-bairros", res.bairros);
+            if (res.destinosPadrao) popularDatalist("listaDestinos", res.destinosPadrao);
+            if (res.resumoEscalas) escalasMemoria = res.resumoEscalas;
+            if (res.registros) exibirTabela(res.registros);
+            atualizarDataFimParaAgora();
+          }
+        }).getDadosIniciais();
+      }
+    }
+
+    function popularDatalist(id, lista) {
+      const el = document.getElementById(id);
+      if (!el || !lista) return;
+      el.innerHTML = "";
+      lista.forEach(function(item) {
+        if (!item) return;
+        const opt = document.createElement("option");
+        opt.value = String(item).trim();
+        el.appendChild(opt);
+      });
+    }
+
+    function iniciarAutoRefresh() {
+      if (intervalRefresh) clearInterval(intervalRefresh);
+      intervalRefresh = setInterval(function() {
+        atualizarDataFimParaAgora();
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.withSuccessHandler(function(registros) {
+            if (registros) exibirTabela(registros);
+          }).carregarDados();
+        }
+      }, 60000);
+    }
+
+    function exibirViaturas(dados) {
+      if (!dados) return;
+      viaturasStatusMap = dados;
+      const resgate = document.getElementById("resgate-viaturas");
+      const incendio = document.getElementById("incendio-viaturas");
+      const adm = document.getElementById("adm-viaturas");
+      if (!resgate) return;
+
+      resgate.innerHTML = ""; incendio.innerHTML = ""; adm.innerHTML = "";
+      let countR = 0, countI = 0, countA = 0, totalDisp = 0, totalEmp = 0;
+
+      dados.forEach(function(linha) {
+        if (!linha || !linha[0]) return;
+        const nome = String(linha[0]).trim();
+        const cat = (linha[1] || "GERAL").toUpperCase().trim();
+        const st = (linha[2] || "DISPONÍVEL").toUpperCase().trim();
+        const isDisp = st === "DISPONÍVEL";
+
+        if (isDisp) totalDisp++; else totalEmp++;
+
+        const card = document.createElement("div");
+        card.className = "viatura-card " + (isDisp ? "disponivel" : "empenhada");
+        card.onclick = function() {
+          registrarNovaSaida();
+          document.getElementById("viatura").value = nome;
+        };
+        card.innerHTML = `<span class="material-symbols-outlined vtr-icon ${isDisp ? 'disponivel' : 'empenhada'}">directions_car</span><span class="vtr-name">${nome}</span><span class="vtr-status-label ${isDisp ? 'disponivel' : 'empenhada'}">${st}</span>`;
+
+        if (cat === "RESGATE") { resgate.appendChild(card); countR++; }
+        else if (cat.includes("INC") || cat.includes("SALV")) { incendio.appendChild(card); countI++; }
+        else { adm.appendChild(card); countA++; }
+      });
+
+      document.getElementById("kpi-disponiveis").textContent = totalDisp;
+      document.getElementById("kpi-empenhadas").textContent = totalEmp;
+      document.getElementById("count-resgate").textContent = countR + " Vtrs";
+      document.getElementById("count-incendio").textContent = countI + " Vtrs";
+      document.getElementById("count-adm").textContent = countA + " Vtrs";
+    }
+
+    function exibirTabela(dados) {
+      if (!dados || dados.length <= 1) return;
+      dadosTabela = dados.filter(l => l && l.some(c => c !== ""));
+      filtrarTabela();
+    }
+
+    function filtrarTabela() {
+      const termo = (document.getElementById("filtro-busca-geral")?.value || "").toLowerCase().trim();
+      const dtIniStr = document.getElementById("filtro-rel-inicio")?.value;
+      const dtFimStr = document.getElementById("filtro-rel-fim")?.value;
+      const dtIni = dtIniStr ? new Date(dtIniStr) : null;
+      const dtFim = dtFimStr ? new Date(dtFimStr) : null;
+
+      const colId = (document.getElementById("filtro-col-id")?.value || "").toLowerCase().trim();
+      const colVtr = (document.getElementById("filtro-col-viatura")?.value || "").toLowerCase().trim();
+      const colCond = (document.getElementById("filtro-col-condutor")?.value || "").toLowerCase().trim();
+      const colEqp = (document.getElementById("filtro-col-equipe")?.value || "").toLowerCase().trim();
+      const colDest = (document.getElementById("filtro-col-destino")?.value || "").toLowerCase().trim();
+      const colBairro = (document.getElementById("filtro-col-bairro")?.value || "").toLowerCase().trim();
+      const colRai = (document.getElementById("filtro-col-rai")?.value || "").toLowerCase().trim();
+      const colNat = (document.getElementById("filtro-col-natureza")?.value || "").toLowerCase().trim();
+      const colOp = (document.getElementById("filtro-col-operador")?.value || "").toLowerCase().trim();
+
+      let somaKm = 0;
+      dadosFiltrados = dadosTabela.slice(1).filter(r => {
+        if (!r) return false;
+        if (termo && !r.some(v => v && String(v).toLowerCase().includes(termo))) return false;
+
+        if (colId && !String(r[0] || "").toLowerCase().includes(colId)) return false;
+        if (colVtr && !String(r[1] || "").toLowerCase().includes(colVtr)) return false;
+        if (colCond && !String(r[2] || "").toLowerCase().includes(colCond)) return false;
+        if (colEqp && !String(r[3] || "").toLowerCase().includes(colEqp)) return false;
+        if (colDest && !String(r[4] || "").toLowerCase().includes(colDest)) return false;
+        if (colBairro && !String(r[5] || "").toLowerCase().includes(colBairro)) return false;
+        if (colRai && !String(r[6] || "").toLowerCase().includes(colRai)) return false;
+        if (colNat && !String(r[7] || "").toLowerCase().includes(colNat)) return false;
+        if (colOp && !String(r[12] || "").toLowerCase().includes(colOp)) return false;
+
+        if (filtroApenasEmAberto && r[10] && String(r[10]).trim() !== "") return false;
+
+        if (dtIni || dtFim) {
+          const dt = parseDateTimeFormat(r[8]);
+          if (!dt) return false;
+          if (dtIni && dt < dtIni) return false;
+          if (dtFim && dt > dtFim) return false;
+        }
+
+        const ks = Number(r[9]);
+        const kc = Number(r[11]);
+        if (!isNaN(ks) && !isNaN(kc) && kc >= ks) somaKm += (kc - ks);
+        return true;
+      });
+
+      document.getElementById("kpi-total-saidas").textContent = dadosFiltrados.length;
+      document.getElementById("kpi-km-total").textContent = somaKm + " km";
+      renderizarTabela();
+    }
+
+    function parseDateTimeFormat(val) {
+      if (!val) return null;
+      if (val instanceof Date) return val;
+      const s = String(val).trim();
+      if (s.includes("/")) {
+        const parts = s.split(/[\/\s:]/);
+        if (parts.length >= 3) {
+          const dia = parseInt(parts[0], 10);
+          const mes = parseInt(parts[1], 10) - 1;
+          const ano = parseInt(parts[2], 10);
+          const hora = parts.length > 3 ? parseInt(parts[3], 10) : 0;
+          const min = parts.length > 4 ? parseInt(parts[4], 10) : 0;
+          return new Date(ano, mes, dia, hora, min);
+        }
+      }
+      const d = new Date(s);
+      return !isNaN(d.getTime()) ? d : null;
+    }
+
+    function renderizarTabela() {
+      const tbody = document.getElementById("tabela-tbody");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      if (dadosFiltrados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; padding:30px; color:var(--slate-400);">Nenhum registro encontrado.</td></tr>`;
+        return;
+      }
+
+      const offset = (paginaAtual - 1) * registrosPorPagina;
+      const itens = dadosFiltrados.slice(offset, offset + registrosPorPagina);
+
+      itens.forEach(r => {
+        const tr = document.createElement("tr");
+        const kmS = Number(r[9]);
+        const kmC = Number(r[11]);
+        const kmRod = (!isNaN(kmS) && !isNaN(kmC) && kmC >= kmS) ? `${kmC - kmS} km` : "---";
+
+        tr.innerHTML = `
+          <td style="font-weight:700;">${r[0]}</td>
+          <td><span class="vtr-tag">${r[1]}</span></td>
+          <td>${r[2]}</td>
+          <td>${r[3] || '---'}</td>
+          <td>${r[4]}</td>
+          <td>${r[5] || '---'}</td>
+          <td>${r[6] || '---'}</td>
+          <td>${r[7] || '---'}</td>
+          <td>${r[8]}</td>
+          <td>${r[9]}</td>
+          <td>${r[10] || 'EM ABERTO'}</td>
+          <td>${r[11] || '---'}</td>
+          <td style="font-weight:700; color:var(--emerald-600);">${kmRod}</td>
+          <td>${r[12]}</td>
+          <td style="text-align:center;">
+            <button onclick="editarRegistroManual('${r[0]}')" style="background:none; border:none; cursor:pointer;"><span class="material-symbols-outlined" style="font-size:18px;">edit</span></button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("infoPaginacao").textContent = `Exibindo ${dadosFiltrados.length} registros`;
+    }
+
+    function mudarPagina(dir) {
+      paginaAtual += dir;
+      if (paginaAtual < 1) paginaAtual = 1;
+      renderizarTabela();
+    }
+
+    function alternarFiltroEmAberto() {
+      filtroApenasEmAberto = !filtroApenasEmAberto;
+      document.getElementById("chip-status-em-aberto")?.classList.toggle("active", filtroApenasEmAberto);
+      filtrarTabela();
+    }
+
+    function limparFiltrosColunas() {
+      ["filtro-col-id", "filtro-col-viatura", "filtro-col-condutor", "filtro-col-equipe", "filtro-col-destino", "filtro-col-bairro", "filtro-col-rai", "filtro-col-natureza", "filtro-col-operador"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+      });
+      filtrarTabela();
+    }
+
+    function registrarNovaSaida() {
+      document.getElementById("modal-despacho-title").textContent = "Novo Despacho Operacional";
+      document.getElementById("formulario").reset();
+      document.getElementById("id").value = "PENDENTE";
+      document.getElementById("operador").value = getOperadorAtual() || "Operador";
+      document.getElementById("operador-display").textContent = getOperadorAtual() || "Operador";
+
+      const agora = new Date();
+      const fuso = new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      document.getElementById("saida").value = fuso;
+      document.getElementById("modalDespacho").style.display = "block";
+    }
+
+    function editarRegistroManual(id) {
+      const match = dadosTabela.find(r => String(r[0]) === String(id));
+      if (!match) return;
+
+      document.getElementById("modal-despacho-title").textContent = `Edição do Registro #${id}`;
+      document.getElementById("id").value = match[0];
+      document.getElementById("viatura").value = match[1];
+      document.getElementById("condutor").value = match[2];
+      document.getElementById("equipe").value = match[3] || "";
+      document.getElementById("destino").value = match[4];
+      document.getElementById("bairro").value = match[5] || "";
+      document.getElementById("rai").value = match[6] || "";
+      document.getElementById("natureza").value = match[7] || "";
+      document.getElementById("saida").value = match[8];
+      document.getElementById("kmSaida").value = match[9];
+      document.getElementById("chegada").value = match[10] || "";
+      document.getElementById("kmChegada").value = match[11] || "";
+      document.getElementById("operador").value = match[12] || getOperadorAtual();
+      document.getElementById("operador-display").textContent = match[12] || getOperadorAtual();
+
+      if (!match[10]) definirHoraChegadaAgora();
+      document.getElementById("modalDespacho").style.display = "block";
+    }
+
+    function fecharModal() {
+      document.getElementById("modalDespacho").style.display = "none";
+    }
+
+    function definirHoraChegadaAgora() {
+      const agora = new Date();
+      const fuso = new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      document.getElementById("chegada").value = fuso;
+    }
+
+    function calcularDistanciaAoDigitar() {
+      const ks = Number(document.getElementById("kmSaida").value);
+      const kc = Number(document.getElementById("kmChegada").value);
+      const ind = document.getElementById("indicador-distancia");
+      if (!isNaN(ks) && !isNaN(kc) && kc > ks) {
+        document.getElementById("valor-km-calculado").textContent = (kc - ks);
+        ind.style.display = "inline-flex";
+      } else {
+        ind.style.display = "none";
+      }
+    }
+
+    function salvar() {
+      const r = {
+        ID: document.getElementById("id").value,
+        viatura: document.getElementById("viatura").value.trim().toUpperCase(),
+        condutor: document.getElementById("condutor").value.trim(),
+        equipe: document.getElementById("equipe").value.trim(),
+        destino: document.getElementById("destino").value.trim(),
+        bairro: document.getElementById("bairro").value.trim(),
+        rai: document.getElementById("rai").value.trim(),
+        natureza: document.getElementById("natureza").value.trim(),
+        dataHoraSaida: document.getElementById("saida").value,
+        kmSaida: document.getElementById("kmSaida").value,
+        dataHoraChegada: document.getElementById("chegada").value,
+        kmChegada: document.getElementById("kmChegada").value,
+        operador: document.getElementById("operador").value || getOperadorAtual()
+      };
+
+      fecharModal();
+      atualizarDataFimParaAgora();
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function() {
+            carregarTudoEmBatch();
+          })
+          .salvarRegistro(r);
+      }
+    }
+
+    function alternarAbaPrincipal(aba) {
+      document.getElementById("tab-btn-operacional").classList.toggle("active", aba === 'operacional');
+      document.getElementById("tab-btn-estatisticas").classList.toggle("active", aba === 'estatisticas');
+      document.getElementById("view-operacional").style.display = aba === 'operacional' ? "block" : "none";
+      document.getElementById("view-estatisticas").style.display = aba === 'estatisticas' ? "block" : "none";
+    }
+
+    // PDF e CSV
+    function gerarPDFViaturas() {
+      if (!window.jspdf || !window.jspdf.jsPDF) return;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      const logoImg = document.getElementById("logo-relatorio");
+      const dataHora = new Date().toLocaleString('pt-BR');
+      const operador = getOperadorAtual() || "Operador";
+
+      const headers = [["ID", "Viatura", "Condutor", "Equipe", "Destino", "Bairro", "RAI", "Natureza", "Saída", "Km S", "Chegada", "Km C", "KM", "Operador"]];
+      const rows = dadosFiltrados.map(r => {
+        let kmDif = "";
+        if (r[9] !== "" && r[11] !== "") {
+          const d = Number(r[11]) - Number(r[9]);
+          if (!isNaN(d) && d >= 0) kmDif = d;
+        }
+        return [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10] || "EM ABERTO", r[11], kmDif, r[12]];
+      });
+
+      doc.autoTable({
+        head: headers,
+        body: rows,
+        startY: 72,
+        margin: { top: 72, bottom: 44, left: 24, right: 24 },
+        styles: { fontSize: 6.0, cellPadding: 1.8, halign: 'center', valign: 'middle' },
+        headStyles: { fillColor: [153, 27, 27], textColor: [255, 255, 255], fontStyle: 'bold' },
+        didDrawPage: (data) => {
+          const pageSize = doc.internal.pageSize;
+          const pageHeight = pageSize.height || pageSize.getHeight();
+          const pageWidth = pageSize.width || pageSize.getWidth();
+          try {
+            if (logoImg && (logoImg.complete || logoImg.naturalWidth)) {
+              doc.addImage(logoImg, 'PNG', 24, 14, 40, 40);
+            }
+          } catch(e) {}
+          doc.setFontSize(14);
+          doc.text("SICOVI - Relatório de Deslocamentos", pageWidth / 2, 30, { align: "center" });
+          doc.setFontSize(8);
+          doc.text(`Data e hora de emissão: ${dataHora}`, pageWidth / 2, 45, { align: "center" });
+          doc.text(`SICOVI - Sistema de Controle de Viaturas • Operador: ${operador}`, 24, pageHeight - 18);
+        }
+      });
+      doc.save(`SICOVI_Relatorio_${new Date().getTime()}.pdf`);
+    }
+
+    function exportarCSV() {
+      if (dadosFiltrados.length === 0) return;
+      const cabecalho = ["ID", "Viatura", "Condutor", "Equipe", "Destino", "Bairro", "RAI", "Natureza", "Saida", "Km_Saida", "Chegada", "Km_Chegada", "Operador"];
+      const linhas = [cabecalho.join(";")];
+      dadosFiltrados.forEach(r => {
+        linhas.push(r.map(v => `"${String(v || '').replace(/"/g, '""')}"`).join(";"));
+      });
+      const link = document.createElement("a");
+      link.href = "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(linhas.join("\n"));
+      link.download = `SICOVI_Exportacao_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    window.addEventListener("DOMContentLoaded", verificarSessaoEIniciar);
+  </script>
+</body>
+</html>

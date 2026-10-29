@@ -1,0 +1,1658 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  ShieldCheck,
+  X,
+  Lock,
+  Truck,
+  Users,
+  KeyRound,
+  Database,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  Copy,
+  Check,
+  FileSpreadsheet,
+  Upload,
+  Search,
+  MapPin,
+  UserCheck,
+  Hash,
+  Sparkles
+} from 'lucide-react';
+import { ViaturaItem } from '../types/sicovi';
+import { storageService, formatarNomeMilitarLimpo, corrigirAcentuacaoTexto } from '../services/storageService';
+import {
+  getSupabaseConfig,
+  saveSupabaseConfig,
+  testarConexaoSupabase,
+  isSupabaseConfigured
+} from '../services/supabaseClient';
+import { SystemAlertModal, AlertModalType } from './SystemAlertModal';
+import { soundEffects } from '../utils/soundEffects';
+
+interface ManagerialModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  viaturas: ViaturaItem[];
+  militares: string[];
+  operadores: string[];
+  onViaturasChange: (vtrs: ViaturaItem[]) => void;
+  onMilitaresChange: (mils: string[]) => void;
+  onRegistrosChange?: () => void;
+  onOperadoresChange?: (ops: string[]) => void;
+  onBairrosChange?: (bairros: string[]) => void;
+}
+
+export const ManagerialModal: React.FC<ManagerialModalProps> = ({
+  isOpen,
+  onClose,
+  viaturas,
+  militares,
+  operadores,
+  onViaturasChange,
+  onMilitaresChange,
+  onRegistrosChange,
+  onOperadoresChange,
+  onBairrosChange
+}) => {
+  const [autenticado, setAutenticado] = useState(false);
+  const [senhaInput, setSenhaInput] = useState('');
+  const [erroAuth, setErroAuth] = useState('');
+  const [carregandoAuth, setCarregandoAuth] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<'viaturas' | 'militares' | 'senhas' | 'planilhas' | 'supabase'>('viaturas');
+
+  // Viatura form state
+  const [novoPrefixo, setNovoPrefixo] = useState('');
+  const [novaCategoria, setNovaCategoria] = useState('INCÊNDIO/SALVAMENTO');
+  const [novoStatus, setNovoStatus] = useState('DISPONÍVEL');
+  const [msgViatura, setMsgViatura] = useState('');
+
+  // Militar form state
+  const [novoMilitarNome, setNovoMilitarNome] = useState('');
+  const [msgMilitar, setMsgMilitar] = useState('');
+
+  // Reset password state with textual search
+  const [filtroMilitarSenha, setFiltroMilitarSenha] = useState('');
+  const [operadorSelecionado, setOperadorSelecionado] = useState(operadores[0] || '');
+  const [novaSenhaOperador, setNovaSenhaOperador] = useState('');
+  const [msgSenha, setMsgSenha] = useState('');
+
+  // Upload/Planilha states
+  const [textoPlanilha, setTextoPlanilha] = useState('');
+  const [modoPlanilha, setModoPlanilha] = useState<'adicionar' | 'substituir'>('adicionar');
+  const [msgPlanilha, setMsgPlanilha] = useState('');
+
+  const [textoViaturas, setTextoViaturas] = useState('');
+  const [modoViaturas, setModoViaturas] = useState<'adicionar' | 'substituir'>('adicionar');
+  const [msgViaturas, setMsgViaturas] = useState('');
+
+  const [textoOperadores, setTextoOperadores] = useState('');
+  const [modoOperadores, setModoOperadores] = useState<'adicionar' | 'substituir'>('adicionar');
+  const [msgOperadores, setMsgOperadores] = useState('');
+
+  const [textoBairros, setTextoBairros] = useState('');
+  const [modoBairros, setModoBairros] = useState<'adicionar' | 'substituir'>('adicionar');
+  const [msgBairros, setMsgBairros] = useState('');
+  const [processandoImportacao, setProcessandoImportacao] = useState(false);
+  const [enviandoTudo, setEnviandoTudo] = useState(false);
+
+  // Reset Banco de Dados states
+  const [senhaReset, setSenhaReset] = useState('');
+  const [resetando, setResetando] = useState(false);
+
+  // Sequência de IDs / Próximo ID states
+  const [proximoIdInput, setProximoIdInput] = useState<number | string>(() => storageService.getProximoId());
+  const [maiorIdAtual, setMaiorIdAtual] = useState<number>(() => storageService.getMaiorIdRegistros());
+  const [maiorIdSupabase, setMaiorIdSupabase] = useState<number | null>(null);
+  const [msgProximoId, setMsgProximoId] = useState('');
+  const [carregandoIdSupa, setCarregandoIdSupa] = useState(false);
+
+  // SystemAlertModal state
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: AlertModalType;
+    onConfirm?: () => void;
+    confirmText?: string;
+    cancelText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+
+  // Supabase config state
+  const currentCfg = getSupabaseConfig();
+  const [supaUrl, setSupaUrl] = useState(currentCfg.url);
+  const [supaKey, setSupaKey] = useState(currentCfg.anonKey);
+  const [statusConexao, setStatusConexao] = useState<{ testado: boolean; ok: boolean; msg: string }>({
+    testado: false,
+    ok: isSupabaseConfigured(),
+    msg: isSupabaseConfigured() ? 'Credenciais configuradas' : 'Supabase não conectado'
+  });
+  const [copiadoSql, setCopiadoSql] = useState(false);
+
+  // Lista combinada de militares e operadores respeitando a antiguidade
+  const listaMilitarParaSenha = useMemo(() => {
+    return Array.from(new Set([...operadores, ...militares])).filter(Boolean);
+  }, [operadores, militares]);
+
+  const militaresFiltradosParaSenha = useMemo(() => {
+    if (!filtroMilitarSenha.trim()) return listaMilitarParaSenha;
+    const t = filtroMilitarSenha.toLowerCase().trim();
+    return listaMilitarParaSenha.filter(m => m.toLowerCase().includes(t));
+  }, [listaMilitarParaSenha, filtroMilitarSenha]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (alertModal.isOpen) {
+          setAlertModal(prev => ({ ...prev, isOpen: false }));
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, alertModal.isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const handleAutenticar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErroAuth('');
+    setCarregandoAuth(true);
+
+    try {
+      const ok = await storageService.verificarSenhaGerencial(senhaInput);
+      if (ok) {
+        setAutenticado(true);
+        setSenhaInput('');
+      } else {
+        setErroAuth('Senha gerencial incorreta!');
+      }
+    } catch {
+      setErroAuth('Erro ao verificar senha.');
+    } finally {
+      setCarregandoAuth(false);
+    }
+  };
+
+  const handleAdicionarViatura = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novoPrefixo.trim()) return;
+
+    const atualizadas = storageService.adicionarViatura({
+      prefixo: novoPrefixo,
+      categoria: novaCategoria,
+      status: novoStatus
+    });
+
+    onViaturasChange(atualizadas);
+    setNovoPrefixo('');
+    setMsgViatura(`Viatura ${novoPrefixo.toUpperCase()} adicionada!`);
+    setTimeout(() => setMsgViatura(''), 3000);
+  };
+
+  const handleExcluirViatura = (prefixo: string) => {
+    setAlertModal({
+      isOpen: true,
+      title: 'Excluir Viatura',
+      message: `Deseja realmente remover a viatura ${prefixo} do sistema?`,
+      type: 'danger',
+      confirmText: 'Sim, Remover',
+      cancelText: 'Cancelar',
+      onConfirm: () => {
+        setAlertModal(prev => ({ ...prev, isOpen: false }));
+        const atualizadas = storageService.excluirViatura(prefixo);
+        onViaturasChange(atualizadas);
+      }
+    });
+  };
+
+  const handleMudarStatusViatura = (prefixo: string, novoSt: string) => {
+    const atualizadas = storageService.atualizarViatura(prefixo, { status: novoSt });
+    onViaturasChange(atualizadas);
+  };
+
+  const handleMudarCategoriaViatura = (prefixo: string, novaCat: string) => {
+    const atualizadas = storageService.atualizarViatura(prefixo, { categoria: novaCat });
+    onViaturasChange(atualizadas);
+  };
+
+  const handleAdicionarMilitar = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novoMilitarNome.trim()) return;
+
+    const nomeFormatado = formatarNomeMilitarLimpo(novoMilitarNome);
+    const atualizados = storageService.adicionarMilitar(nomeFormatado);
+    onMilitaresChange(atualizados);
+    setNovoMilitarNome('');
+    setMsgMilitar(`Militar cadastrado com sucesso!`);
+    setTimeout(() => setMsgMilitar(''), 3000);
+  };
+
+  const handleExcluirMilitar = (nome: string) => {
+    setAlertModal({
+      isOpen: true,
+      title: 'Excluir Militar',
+      message: `Deseja realmente remover o militar ${nome}?`,
+      type: 'danger',
+      confirmText: 'Sim, Remover',
+      cancelText: 'Cancelar',
+      onConfirm: () => {
+        setAlertModal(prev => ({ ...prev, isOpen: false }));
+        const atualizados = storageService.excluirMilitar(nome);
+        onMilitaresChange(atualizados);
+      }
+    });
+  };
+
+  const handleResetarSenha = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!operadorSelecionado || !novaSenhaOperador.trim()) return;
+
+    const res = storageService.resetarSenhaOperador(operadorSelecionado, novaSenhaOperador);
+    setMsgSenha(res.mensagem);
+    setNovaSenhaOperador('');
+    setTimeout(() => setMsgSenha(''), 4000);
+  };
+
+  // Upload Handlers com detecção automática de codificação (UTF-8 e Windows-1252 / ISO-8859-1)
+  const handleFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (texto: string) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const buffer = ev.target?.result as ArrayBuffer;
+      if (buffer) {
+        let texto = '';
+        try {
+          const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+          const decoded = utf8Decoder.decode(buffer);
+          if (!decoded.includes('\uFFFD')) {
+            texto = decoded;
+          } else {
+            throw new Error('Falha UTF-8');
+          }
+        } catch {
+          // Se falhar UTF-8 (muito comum em planilhas salvas no Excel para Windows), decodifica com Windows-1252
+          try {
+            const winDecoder = new TextDecoder('windows-1252');
+            texto = winDecoder.decode(buffer);
+          } catch {
+            const isoDecoder = new TextDecoder('iso-8859-1');
+            texto = isoDecoder.decode(buffer);
+          }
+        }
+        setter(corrigirAcentuacaoTexto(texto));
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  const handleProcessarPlanilhaRegistros = async () => {
+    if (!textoPlanilha.trim()) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Planilha Vazia',
+        message: 'Cole ou selecione o arquivo da planilha de registros.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    setProcessandoImportacao(true);
+    setMsgPlanilha('Importando e salvando registros diretamente no banco de dados Supabase na nuvem...');
+    try {
+      const res = await storageService.importarPlanilhaRegistros(textoPlanilha, modoPlanilha);
+      setMsgPlanilha(`Sucesso! ${res.importados} registros de deslocamento foram persistidos no banco de dados.`);
+      setTextoPlanilha('');
+      if (onRegistrosChange) onRegistrosChange();
+      let msgDetalhe = `${res.importados} registros de deslocamento foram persistidos no banco de dados com sucesso!`;
+      if (res.salvoNoSupabase) {
+        msgDetalhe += ' Sincronizado diretamente com a nuvem do Supabase.';
+      } else if (res.erroSupabase) {
+        msgDetalhe += ` (Aviso Supabase: ${res.erroSupabase} - dados salvos com segurança no Banco Central da aplicação).`;
+      }
+      setAlertModal({
+        isOpen: true,
+        title: 'Importação Concluída',
+        message: msgDetalhe,
+        type: 'success'
+      });
+    } catch (e: any) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Erro na Importação',
+        message: e?.message || 'Ocorreu um erro ao importar e sincronizar os registros.',
+        type: 'error'
+      });
+    } finally {
+      setProcessandoImportacao(false);
+      setTimeout(() => setMsgPlanilha(''), 6000);
+    }
+  };
+
+  const handleProcessarViaturas = async () => {
+    if (!textoViaturas.trim()) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Lista Vazia',
+        message: 'Cole ou selecione o arquivo com a lista de viaturas e categorias (Prefixo; Categoria; Status).',
+        type: 'warning'
+      });
+      return;
+    }
+
+    setProcessandoImportacao(true);
+    setMsgViaturas('Salvando viaturas no banco de dados...');
+    try {
+      const res = await storageService.importarViaturas(textoViaturas, modoViaturas);
+      onViaturasChange(storageService.getViaturas());
+      setTextoViaturas('');
+      setMsgViaturas(`Sucesso! ${res.importados} viaturas importadas e sincronizadas no banco.`);
+      setAlertModal({
+        isOpen: true,
+        title: 'Viaturas Salvas no Banco',
+        message: `${res.importados} viaturas foram importadas e persistidas no Supabase e banco central com suas categorias.`,
+        type: 'success'
+      });
+    } catch (e: any) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Erro na Importação',
+        message: e?.message || 'Erro ao sincronizar viaturas.',
+        type: 'error'
+      });
+    } finally {
+      setProcessandoImportacao(false);
+      setTimeout(() => setMsgViaturas(''), 6000);
+    }
+  };
+
+  const handleProcessarOperadores = async () => {
+    if (!textoOperadores.trim()) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Lista Vazia',
+        message: 'Cole ou selecione a lista de operadores (Operador; Senha).',
+        type: 'warning'
+      });
+      return;
+    }
+
+    setProcessandoImportacao(true);
+    setMsgOperadores('Salvando credenciais e operadores no banco de dados...');
+    try {
+      const res = await storageService.importarOperadoresSenhas(textoOperadores, modoOperadores);
+      setMsgOperadores(`Sucesso! ${res.importados} operadores e credenciais salvos no banco.`);
+      setTextoOperadores('');
+      if (onOperadoresChange) onOperadoresChange(res.operadores);
+      onMilitaresChange(storageService.getMilitares());
+      setAlertModal({
+        isOpen: true,
+        title: 'Operadores Salvos no Banco',
+        message: `${res.importados} operadores e credenciais foram salvos no Supabase na nuvem e no servidor central. O login agora funcionará em qualquer máquina ou celular!`,
+        type: 'success'
+      });
+    } catch (e: any) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Erro na Importação',
+        message: e?.message || 'Erro ao sincronizar operadores.',
+        type: 'error'
+      });
+    } finally {
+      setProcessandoImportacao(false);
+      setTimeout(() => setMsgOperadores(''), 6000);
+    }
+  };
+
+  const handleProcessarBairros = async () => {
+    if (!textoBairros.trim()) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Lista Vazia',
+        message: 'Cole ou selecione a lista de bairros e cidades.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    setProcessandoImportacao(true);
+    setMsgBairros('Salvando bairros no banco de dados...');
+    try {
+      const res = await storageService.importarBairros(textoBairros, modoBairros);
+      setMsgBairros(`Sucesso! ${res.importados} bairros/cidades importados para o banco.`);
+      setTextoBairros('');
+      if (onBairrosChange) onBairrosChange(res.bairros);
+      setAlertModal({
+        isOpen: true,
+        title: 'Bairros Salvos no Banco',
+        message: `${res.importados} bairros e cidades foram adicionados e persistidos no banco de dados na nuvem.`,
+        type: 'success'
+      });
+    } catch (e: any) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Erro na Importação',
+        message: e?.message || 'Erro ao sincronizar bairros.',
+        type: 'error'
+      });
+    } finally {
+      setProcessandoImportacao(false);
+      setTimeout(() => setMsgBairros(''), 6000);
+    }
+  };
+
+  const handleSolicitarResetBanco = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!senhaReset.trim()) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Senha Obrigatória',
+        message: 'Informe a senha administrativa para confirmar o reset do banco de dados.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    setAlertModal({
+      isOpen: true,
+      title: 'Atenção: Reset Geral do Banco de Dados',
+      message: 'Esta operação irá EXCLUIR TODOS os registros de despachos e histórico de viaturas, limpar todas as escalas e redefinir o status de toda a frota para DISPONÍVEL (tanto localmente quanto no Supabase Cloud). Deseja realmente prosseguir?',
+      type: 'danger',
+      confirmText: 'Sim, Resetar Banco',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        setAlertModal(prev => ({ ...prev, isOpen: false }));
+        setResetando(true);
+        try {
+          const res = await storageService.resetarBancoDeDados(senhaReset);
+          if (res.success) {
+            setSenhaReset('');
+            onViaturasChange(storageService.getViaturas());
+            if (onRegistrosChange) onRegistrosChange();
+            setAlertModal({
+              isOpen: true,
+              title: 'Banco de Dados Reinicializado',
+              message: res.mensagem,
+              type: 'success'
+            });
+          } else {
+            setAlertModal({
+              isOpen: true,
+              title: 'Falha no Reset',
+              message: res.mensagem,
+              type: 'error'
+            });
+          }
+        } catch (err: any) {
+          setAlertModal({
+            isOpen: true,
+            title: 'Erro no Reset',
+            message: 'Ocorreu um erro ao resetar o banco de dados: ' + (err.message || String(err)),
+            type: 'error'
+          });
+        } finally {
+          setResetando(false);
+        }
+      }
+    });
+  };
+
+  const handleConsultarIdsBanco = async () => {
+    setCarregandoIdSupa(true);
+    setMsgProximoId('');
+    try {
+      const localMax = storageService.getMaiorIdRegistros();
+      setMaiorIdAtual(localMax);
+      const supaMax = await storageService.obterMaiorIdSupabase();
+      setMaiorIdSupabase(supaMax);
+      const prox = storageService.getProximoId();
+      setProximoIdInput(prox);
+      soundEffects.playArrival();
+    } finally {
+      setCarregandoIdSupa(false);
+    }
+  };
+
+  const handleSalvarProximoId = () => {
+    const num = parseInt(String(proximoIdInput).trim(), 10);
+    if (isNaN(num) || num <= 0) {
+      setAlertModal({
+        isOpen: true,
+        title: 'ID Inválido',
+        message: 'Por favor, informe um número inteiro positivo para o próximo ID de registro.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    storageService.setProximoId(num);
+    setProximoIdInput(num);
+    setMsgProximoId(`Próximo ID configurado para #${num}! Novos registros e despachos iniciarão a partir deste número.`);
+    soundEffects.playSuccess();
+    setTimeout(() => setMsgProximoId(''), 4500);
+  };
+
+  const handleAutoAjustarProximoId = () => {
+    const localMax = storageService.getMaiorIdRegistros();
+    const teto = Math.max(localMax, maiorIdSupabase || 0);
+    const novoProx = teto + 1;
+    storageService.setProximoId(novoProx);
+    setProximoIdInput(novoProx);
+    setMaiorIdAtual(localMax);
+    setMsgProximoId(`Próximo ID ajustado automaticamente para #${novoProx} (+1 após o maior ID #${teto} do banco).`);
+    soundEffects.playSuccess();
+    setTimeout(() => setMsgProximoId(''), 4500);
+  };
+
+  const handleSalvarConfigSupabase = () => {
+    saveSupabaseConfig(supaUrl, supaKey);
+    handleTestarSupabase();
+  };
+
+  const handleTestarSupabase = async () => {
+    const res = await testarConexaoSupabase();
+    setStatusConexao({
+      testado: true,
+      ok: res.success,
+      msg: res.message
+    });
+  };
+
+  const handleEnviarTudoParaSupabase = async () => {
+    setEnviandoTudo(true);
+    try {
+      const res = await storageService.enviarTodosDadosLocaisParaSupabase();
+      setAlertModal({
+        isOpen: true,
+        title: res.success ? 'Dados Enviados com Sucesso' : 'Falha no Envio',
+        message: res.mensagem,
+        type: res.success ? 'success' : 'error'
+      });
+    } catch (e: any) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Erro no Envio',
+        message: e?.message || 'Falha ao sincronizar dados locais com o Supabase.',
+        type: 'error'
+      });
+    } finally {
+      setEnviandoTudo(false);
+    }
+  };
+
+  const handleSincronizarSupabase = async () => {
+    const res = await storageService.sincronizarComSupabase(0);
+    setAlertModal({
+      isOpen: true,
+      title: res.success ? 'Sincronização Concluída' : 'Aviso de Sincronização',
+      message: res.mensagem,
+      type: res.success ? 'success' : 'warning'
+    });
+    if (res.success) {
+      onViaturasChange(storageService.getViaturas());
+      onMilitaresChange(storageService.getMilitares());
+      if (onRegistrosChange) onRegistrosChange();
+    }
+  };
+
+  const handleCopiarSql = () => {
+    const sqlScript = `-- SICOVI - Schema Supabase
+CREATE TABLE IF NOT EXISTS public.viaturas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    prefixo VARCHAR(50) UNIQUE NOT NULL,
+    categoria VARCHAR(50) NOT NULL DEFAULT 'GERAL',
+    status VARCHAR(50) NOT NULL DEFAULT 'DISPONÍVEL',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.militares (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(100) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.operadores (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario VARCHAR(100) UNIQUE NOT NULL,
+    senha_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.registros (
+    id BIGSERIAL PRIMARY KEY,
+    viatura VARCHAR(50) NOT NULL,
+    condutor VARCHAR(100) NOT NULL,
+    equipe TEXT,
+    destino VARCHAR(150) NOT NULL,
+    bairro VARCHAR(100),
+    rai VARCHAR(50),
+    natureza VARCHAR(150),
+    saida TIMESTAMP WITH TIME ZONE NOT NULL,
+    km_saida INTEGER NOT NULL,
+    chegada TIMESTAMP WITH TIME ZONE,
+    km_chegada INTEGER,
+    operador VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+ALTER TABLE public.viaturas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.militares ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.operadores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.registros ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Acesso Total Viaturas" ON public.viaturas FOR ALL USING (true);
+CREATE POLICY "Acesso Total Militares" ON public.militares FOR ALL USING (true);
+CREATE POLICY "Acesso Total Operadores" ON public.operadores FOR ALL USING (true);
+CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
+`;
+    navigator.clipboard.writeText(sqlScript);
+    setCopiadoSql(true);
+    setTimeout(() => setCopiadoSql(false), 2500);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b-2 border-red-700">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black tracking-wider uppercase text-slate-100">
+                Painel Administrativo &bull; Gestão de Frota e Dados
+              </h3>
+              <p className="text-[10px] text-slate-400">
+                Acesso restrito ao Oficial de Dia e Encarregado de Frota
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        {!autenticado ? (
+          <div className="p-8 flex flex-col items-center justify-center flex-1 max-w-sm mx-auto w-full text-center">
+            <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-700 border border-red-100 flex items-center justify-center mb-4">
+              <Lock className="w-7 h-7" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-1">Acesso Administrativo</h3>
+            <p className="text-xs text-slate-500 mb-6">
+              Insira a senha de administração gerencial para gerenciar a frota, importar planilhas e redefinir senhas.
+            </p>
+
+            {erroAuth && (
+              <div className="w-full p-3 mb-4 bg-rose-50 border border-rose-300 rounded-xl text-xs font-bold text-rose-800 text-center animate-in shake duration-200">
+                {erroAuth}
+              </div>
+            )}
+
+            <form onSubmit={handleAutenticar} className="w-full space-y-3">
+              <input
+                type="password"
+                value={senhaInput}
+                onChange={e => setSenhaInput(e.target.value)}
+                placeholder="Senha administrativa"
+                required
+                autoFocus
+                className="w-full px-4 py-2.5 text-xs text-center border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:border-red-700 transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={carregandoAuth}
+                className="w-full py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold tracking-wide shadow-md shadow-red-700/20 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {carregandoAuth ? 'Verificando...' : 'Liberar Painel'}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <div className="flex flex-col flex-1 overflow-hidden">
+            {/* Tabs */}
+            <div className="flex border-b border-slate-200 bg-slate-50 px-6 gap-2 pt-3 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('viaturas')}
+                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  activeTab === 'viaturas'
+                    ? 'border-red-700 text-red-700 bg-white rounded-t-lg'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Truck className="w-4 h-4" /> Viaturas ({viaturas.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('militares')}
+                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  activeTab === 'militares'
+                    ? 'border-red-700 text-red-700 bg-white rounded-t-lg'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Users className="w-4 h-4" /> Militares ({militares.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('senhas')}
+                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  activeTab === 'senhas'
+                    ? 'border-red-700 text-red-700 bg-white rounded-t-lg'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <KeyRound className="w-4 h-4" /> Reset de Senhas
+              </button>
+              <button
+                onClick={() => setActiveTab('planilhas')}
+                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  activeTab === 'planilhas'
+                    ? 'border-red-700 text-red-700 bg-white rounded-t-lg'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Upload de Planilhas
+              </button>
+              <button
+                onClick={() => setActiveTab('supabase')}
+                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  activeTab === 'supabase'
+                    ? 'border-red-700 text-red-700 bg-white rounded-t-lg'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Database className="w-4 h-4 text-emerald-600" /> Supabase
+              </button>
+            </div>
+
+            {/* Tab Body */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {/* ABA 1: VIATURAS */}
+              {activeTab === 'viaturas' && (
+                <div className="space-y-6">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <h4 className="text-xs font-black uppercase text-slate-800 mb-3 flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-red-700" /> Cadastrar Viatura
+                    </h4>
+                    {msgViatura && (
+                      <div className="p-2 mb-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-lg flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4" /> {msgViatura}
+                      </div>
+                    )}
+                    <form onSubmit={handleAdicionarViatura} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Prefixo</label>
+                        <input
+                          type="text"
+                          value={novoPrefixo}
+                          onChange={e => setNovoPrefixo(e.target.value.toUpperCase())}
+                          placeholder="Ex: UR-188, ABT-50"
+                          required
+                          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Categoria</label>
+                        <select
+                          value={novaCategoria}
+                          onChange={e => setNovaCategoria(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-bold"
+                        >
+                          <option value="INCÊNDIO/SALVAMENTO">INCÊNDIO/SALVAMENTO</option>
+                          <option value="SUPORTE AVANÇADO">SUPORTE AVANÇADO</option>
+                          <option value="RESGATE">RESGATE</option>
+                          <option value="ADMINISTRATIVA">ADMINISTRATIVA</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Status Inicial</label>
+                        <select
+                          value={novoStatus}
+                          onChange={e => setNovoStatus(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-bold"
+                        >
+                          <option value="DISPONÍVEL">Disponível</option>
+                          <option value="EMPENHADA">Empenhada</option>
+                          <option value="MANUTENÇÃO">Manutenção</option>
+                        </select>
+                      </div>
+                      <button
+                        type="submit"
+                        className="py-2 px-4 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                      >
+                        <Plus className="w-4 h-4" /> Adicionar
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-100 text-slate-700 uppercase font-bold text-[10px]">
+                        <tr>
+                          <th className="py-2 px-3">Prefixo</th>
+                          <th className="py-2 px-3">Categoria</th>
+                          <th className="py-2 px-3">Status Atual</th>
+                          <th className="py-2 px-3 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {viaturas.map(v => (
+                          <tr key={v.prefixo} className="hover:bg-slate-50">
+                            <td className="py-2.5 px-3 font-bold text-slate-900">{v.prefixo}</td>
+                            <td className="py-2.5 px-3">
+                              <select
+                                value={v.categoria}
+                                onChange={e => handleMudarCategoriaViatura(v.prefixo, e.target.value)}
+                                className="px-2 py-1 text-[11px] font-bold border border-slate-300 rounded-lg bg-white text-slate-800"
+                              >
+                                <option value="INCÊNDIO/SALVAMENTO">INCÊNDIO/SALVAMENTO</option>
+                                <option value="SUPORTE AVANÇADO">SUPORTE AVANÇADO</option>
+                                <option value="RESGATE">RESGATE</option>
+                                <option value="ADMINISTRATIVA">ADMINISTRATIVA</option>
+                              </select>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <select
+                                value={v.status}
+                                onChange={e => handleMudarStatusViatura(v.prefixo, e.target.value)}
+                                className={`px-2 py-1 rounded text-[11px] font-bold border ${
+                                  v.status === 'DISPONÍVEL'
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                    : v.status === 'EMPENHADA'
+                                    ? 'bg-rose-50 text-rose-800 border-rose-300'
+                                    : 'bg-amber-50 text-amber-800 border-amber-300'
+                                }`}
+                              >
+                                <option value="DISPONÍVEL">Disponível</option>
+                                <option value="EMPENHADA">Empenhada</option>
+                                <option value="MANUTENÇÃO">Manutenção</option>
+                              </select>
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <button
+                                onClick={() => handleExcluirViatura(v.prefixo)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer transition-colors"
+                                title="Excluir Viatura"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 2: MILITARES */}
+              {activeTab === 'militares' && (
+                <div className="space-y-6">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <h4 className="text-xs font-black uppercase text-slate-800 mb-3 flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-red-700" /> Cadastrar Novo Militar
+                    </h4>
+                    {msgMilitar && (
+                      <div className="p-2 mb-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-lg flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4" /> {msgMilitar}
+                      </div>
+                    )}
+                    <form onSubmit={handleAdicionarMilitar} className="flex gap-3 items-end">
+                      <div className="flex-1">
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                          Nome / Posto / Graduação
+                        </label>
+                        <input
+                          type="text"
+                          value={novoMilitarNome}
+                          onChange={e => setNovoMilitarNome(e.target.value)}
+                          placeholder="Ex: Cb Costa, 1º Sgt Silva, Sd Souza"
+                          required
+                          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-semibold"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="py-2 px-5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm"
+                      >
+                        <Plus className="w-4 h-4" /> Salvar Militar
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    {militares.map(m => (
+                      <div
+                        key={m}
+                        className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg text-xs hover:border-slate-300"
+                      >
+                        <span className="font-bold text-slate-800">{m}</span>
+                        <button
+                          onClick={() => handleExcluirMilitar(m)}
+                          className="text-slate-300 hover:text-rose-600 p-1 cursor-pointer transition-colors"
+                          title="Remover Militar"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 3: RESET DE SENHAS COM BUSCA TEXTUAL PRÁTICA */}
+              {activeTab === 'senhas' && (
+                <div className="max-w-xl mx-auto py-2 space-y-4">
+                  <div className="text-center mb-4">
+                    <div className="w-12 h-12 bg-red-50 text-red-700 rounded-xl flex items-center justify-center mx-auto mb-2 border border-red-100">
+                      <KeyRound className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-900">Redefinição de Senha de Militares</h4>
+                    <p className="text-xs text-slate-500">
+                      Localize rapidamente o militar por nome ou graduação para redefinir sua senha de acesso.
+                    </p>
+                  </div>
+
+                  {msgSenha && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl text-center flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" /> {msgSenha}
+                    </div>
+                  )}
+
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                    {/* Campo de Busca Textual Prática */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        1. Filtrar Militar por Nome / Graduação:
+                      </label>
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="Digite para filtrar (ex: Silva, Dantas, Cb, Sgt, Ten)..."
+                          value={filtroMilitarSenha}
+                          onChange={e => setFiltroMilitarSenha(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-red-700"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Lista selecionável com scroll */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-600">
+                          Militar Selecionado:
+                        </label>
+                        <span className="text-xs font-black text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                          {operadorSelecionado || 'Nenhum selecionado'}
+                        </span>
+                      </div>
+                      <div className="border border-slate-300 rounded-xl bg-white max-h-36 overflow-y-auto p-1 divide-y divide-slate-100 shadow-inner">
+                        {militaresFiltradosParaSenha.map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setOperadorSelecionado(m)}
+                            className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between rounded-lg transition-colors cursor-pointer ${
+                              operadorSelecionado === m
+                                ? 'bg-red-700 text-white font-bold'
+                                : 'hover:bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <UserCheck className="w-3.5 h-3.5 opacity-70" />
+                              <span>{m}</span>
+                            </span>
+                            {operadorSelecionado === m && <Check className="w-4 h-4" />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleResetarSenha} className="space-y-3 pt-2 border-t border-slate-200">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          2. Nova Senha para &quot;{operadorSelecionado}&quot;
+                        </label>
+                        <input
+                          type="text"
+                          value={novaSenhaOperador}
+                          onChange={e => setNovaSenhaOperador(e.target.value)}
+                          placeholder="Digite a nova senha (mínimo 4 caracteres)"
+                          required
+                          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold tracking-wide shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
+                      >
+                        <KeyRound className="w-4 h-4" /> Redefinir Senha do Militar
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 4: UPLOAD DE PLANILHAS (BANCO, OPERADORES, BAIRROS) */}
+              {activeTab === 'planilhas' && (
+                <div className="space-y-6">
+                  {/* Status do Banco de Dados Online (Supabase) */}
+                  <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 flex-wrap ${
+                    isSupabaseConfigured()
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-xs'
+                      : 'bg-amber-50 border-amber-300 text-amber-950 shadow-xs'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3.5 h-3.5 rounded-full shrink-0 ${isSupabaseConfigured() ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5">
+                          <Database className="w-4 h-4" />
+                          <span>
+                            {isSupabaseConfigured()
+                              ? 'Banco de Dados Online Conectado (Supabase)'
+                              : 'Aviso: Banco de Dados Online (Supabase) Não Configurado'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-medium opacity-90 mt-0.5">
+                          {isSupabaseConfigured()
+                            ? 'As planilhas e dados importados abaixo serão persistidos no banco de dados online na nuvem e ficarão salvos para todos os dispositivos.'
+                            : 'Sem as credenciais do Supabase, as planilhas ficarão salvas apenas na memória deste navegador. Para sincronizar online com todas as máquinas, configure o Supabase.'}
+                        </div>
+                      </div>
+                    </div>
+                    {!isSupabaseConfigured() && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('supabase')}
+                        className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer shadow-xs transition-all"
+                      >
+                        Configurar Banco Online
+                      </button>
+                    )}
+                  </div>
+                  {/* Seção 1: Planilha do Banco de Dados / Despachos */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-slate-800">
+                            1. Upload do Banco de Dados de Despachos (Planilha)
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            Formato: &quot;ID &bull; Viatura &bull; Condutor &bull; Equipe &bull; Destino &bull; Bairro &bull; RAI &bull; Natureza Ocorrência &bull; Data/Hora Saída &bull; Km Saída &bull; Data/Hora Chegada &bull; Km Chegada &bull; Operador&quot;
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] font-bold text-slate-600">Modo:</label>
+                        <select
+                          value={modoPlanilha}
+                          onChange={e => setModoPlanilha(e.target.value as any)}
+                          className="px-2 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                        >
+                          <option value="adicionar">Adicionar aos existentes</option>
+                          <option value="substituir">Substituir banco existente</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {msgPlanilha && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{msgPlanilha}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 hover:border-slate-400 rounded-lg text-xs font-bold text-slate-700 cursor-pointer shadow-2xs">
+                        <Upload className="w-4 h-4 text-emerald-600" />
+                        <span>Carregar Arquivo (.csv, .tsv, .txt)</span>
+                        <input
+                          type="file"
+                          accept=".csv,.tsv,.txt"
+                          onChange={e => handleFileUpload(e, setTextoPlanilha)}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-xs text-slate-400">ou cole abaixo o conteúdo copiado do Excel/Sheets:</span>
+                    </div>
+
+                    <textarea
+                      rows={5}
+                      value={textoPlanilha}
+                      onChange={e => setTextoPlanilha(corrigirAcentuacaoTexto(e.target.value))}
+                      placeholder="Cole aqui os dados copiados da sua planilha (separados por tabulação ou ponto e vírgula)..."
+                      className="w-full p-3 font-mono text-[11px] bg-white border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-red-700"
+                    />
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleProcessarPlanilhaRegistros}
+                        disabled={processandoImportacao}
+                        className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                      >
+                        <Upload className="w-4 h-4" /> {processandoImportacao ? 'Salvando no Banco...' : 'Processar e Importar Despachos'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Seção 2: Upload de Operadores e Senhas */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-5 h-5 text-blue-600" />
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-slate-800">
+                            2. Upload da Lista de Operadores e Senhas
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            Formato: &quot;Operador; Senha&quot; (exemplo: SubTen Dantas; 123456 ou separado por tabulação)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] font-bold text-slate-600">Modo:</label>
+                        <select
+                          value={modoOperadores}
+                          onChange={e => setModoOperadores(e.target.value as any)}
+                          className="px-2 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                        >
+                          <option value="adicionar">Adicionar / Atualizar</option>
+                          <option value="substituir">Substituir todos</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {msgOperadores && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{msgOperadores}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 hover:border-slate-400 rounded-lg text-xs font-bold text-slate-700 cursor-pointer shadow-2xs">
+                        <Upload className="w-4 h-4 text-blue-600" />
+                        <span>Carregar Arquivo (.csv, .txt)</span>
+                        <input
+                          type="file"
+                          accept=".csv,.txt,.tsv"
+                          onChange={e => handleFileUpload(e, setTextoOperadores)}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-xs text-slate-400">ou cole os dados no formato &quot;Operador; Senha&quot;:</span>
+                    </div>
+
+                    <textarea
+                      rows={3}
+                      value={textoOperadores}
+                      onChange={e => setTextoOperadores(corrigirAcentuacaoTexto(e.target.value))}
+                      placeholder="SubTen Dantas; 123456&#10;1º Sgt Silva; 654321&#10;Cb Costa; 121314"
+                      className="w-full p-3 font-mono text-[11px] bg-white border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-red-700"
+                    />
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleProcessarOperadores}
+                        className="py-2 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                      >
+                        <Upload className="w-4 h-4" /> Importar Operadores
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Seção 3: Upload de Bairros / Cidades */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-5 h-5 text-amber-600" />
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-slate-800">
+                            3. Upload da Lista de Bairros / Cidades
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            Cole os bairros e cidades (um por linha ou separados por vírgula / ponto e vírgula)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] font-bold text-slate-600">Modo:</label>
+                        <select
+                          value={modoBairros}
+                          onChange={e => setModoBairros(e.target.value as any)}
+                          className="px-2 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                        >
+                          <option value="adicionar">Adicionar à lista existente</option>
+                          <option value="substituir">Substituir lista existente</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {msgBairros && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{msgBairros}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 hover:border-slate-400 rounded-lg text-xs font-bold text-slate-700 cursor-pointer shadow-2xs">
+                        <Upload className="w-4 h-4 text-amber-600" />
+                        <span>Carregar Arquivo (.txt, .csv)</span>
+                        <input
+                          type="file"
+                          accept=".txt,.csv"
+                          onChange={e => handleFileUpload(e, setTextoBairros)}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-xs text-slate-400">ou cole a relação de bairros/cidades:</span>
+                    </div>
+
+                    <textarea
+                      rows={3}
+                      value={textoBairros}
+                      onChange={e => setTextoBairros(corrigirAcentuacaoTexto(e.target.value))}
+                      placeholder="Centro&#10;Setor Bueno&#10;Jardim Goiás&#10;Marista&#10;Campinas"
+                      className="w-full p-3 font-mono text-[11px] bg-white border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-red-700"
+                    />
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleProcessarBairros}
+                        className="py-2 px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                      >
+                        <Upload className="w-4 h-4" /> Importar Bairros/Cidades
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Seção 4: Upload da Lista de Viaturas e Categorias */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-5 h-5 text-indigo-600" />
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-slate-800">
+                            4. Upload da Lista de Viaturas e Categorias
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            Formato: &quot;Prefixo; Categoria; Status&quot; (Categorias: INCÊNDIO/SALVAMENTO, SUPORTE AVANÇADO, RESGATE, ADMINISTRATIVA)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] font-bold text-slate-600">Modo:</label>
+                        <select
+                          value={modoViaturas}
+                          onChange={e => setModoViaturas(e.target.value as any)}
+                          className="px-2 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                        >
+                          <option value="adicionar">Adicionar / Atualizar</option>
+                          <option value="substituir">Substituir frota existente</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {msgViaturas && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{msgViaturas}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 hover:border-slate-400 rounded-lg text-xs font-bold text-slate-700 cursor-pointer shadow-2xs">
+                        <Upload className="w-4 h-4 text-indigo-600" />
+                        <span>Carregar Arquivo (.txt, .csv, .tsv)</span>
+                        <input
+                          type="file"
+                          accept=".txt,.csv,.tsv"
+                          onChange={e => handleFileUpload(e, setTextoViaturas)}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-xs text-slate-400">ou cole a relação de viaturas:</span>
+                    </div>
+
+                    <textarea
+                      rows={3}
+                      value={textoViaturas}
+                      onChange={e => setTextoViaturas(corrigirAcentuacaoTexto(e.target.value))}
+                      placeholder="ABT-22; INCÊNDIO/SALVAMENTO; DISPONÍVEL&#10;USA-01; SUPORTE AVANÇADO; DISPONÍVEL&#10;UR-15; RESGATE; DISPONÍVEL&#10;ADM-02; ADMINISTRATIVA; DISPONÍVEL"
+                      className="w-full p-3 font-mono text-[11px] bg-white border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-red-700"
+                    />
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleProcessarViaturas}
+                        className="py-2 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                      >
+                        <Upload className="w-4 h-4" /> Importar e Sincronizar Viaturas
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Seção 5: SEQUÊNCIA NUMÉRICA DE DESPACHOS - PRÓXIMO ID */}
+                  <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border-2 border-blue-200 rounded-2xl p-5 space-y-4">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-100 border border-blue-300 flex items-center justify-center shrink-0 text-blue-700">
+                          <Hash className="w-5 h-5 font-black" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-blue-900 tracking-wide flex items-center gap-2">
+                            <span>5. Sequência Numérica de Despachos &bull; Próximo ID</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-200/80 text-blue-800 border border-blue-300">
+                              Aproveitamento de Banco
+                            </span>
+                          </h4>
+                          <p className="text-[11px] text-blue-800 leading-relaxed font-medium mt-0.5">
+                            Defina o número inicial para os novos registros de despachos e saídas de viaturas. Esta configuração garante a <strong>continuidade da sequência existente</strong> com os dados históricos já salvos no banco de dados.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Badges de IDs atuais */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="px-3 py-1.5 bg-white border border-blue-200 rounded-xl flex items-center gap-2 text-xs shadow-2xs">
+                          <span className="text-[10px] font-bold uppercase text-slate-500">Maior ID Local:</span>
+                          <span className="font-mono font-black text-slate-900">#{maiorIdAtual}</span>
+                        </div>
+                        {maiorIdSupabase !== null && (
+                          <div className="px-3 py-1.5 bg-white border border-emerald-300 rounded-xl flex items-center gap-2 text-xs shadow-2xs">
+                            <span className="text-[10px] font-bold uppercase text-emerald-600">Maior ID Nuvem:</span>
+                            <span className="font-mono font-black text-emerald-800">#{maiorIdSupabase}</span>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleConsultarIdsBanco}
+                          disabled={carregandoIdSupa}
+                          className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-[11px] font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                          title="Consultar maior ID no Supabase"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${carregandoIdSupa ? 'animate-spin' : ''}`} />
+                          <span>Verificar Banco</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {msgProximoId && (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in duration-200">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{msgProximoId}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3 flex-wrap pt-3 border-t border-blue-200">
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                          Próximo ID a ser gravado:
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={proximoIdInput}
+                          onChange={e => setProximoIdInput(e.target.value)}
+                          className="w-32 px-3 py-1.5 text-xs font-mono font-black text-blue-900 border-2 border-blue-400 rounded-xl bg-white focus:outline-none focus:border-blue-600 text-center shadow-2xs"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleSalvarProximoId}
+                        className="py-2 px-4 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>Gravar Próximo ID</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleAutoAjustarProximoId}
+                        className="py-2 px-3 bg-white hover:bg-blue-50 border border-blue-300 text-blue-800 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                      >
+                        <Sparkles className="w-4 h-4 text-blue-600" />
+                        <span>Ajustar Automático (+1 do maior)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Seção 6: ZONA DE PERIGO - RESET GERAL DO BANCO DE DADOS */}
+                  <div className="bg-rose-50/70 border-2 border-rose-300 rounded-2xl p-5 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-rose-100 border border-rose-300 flex items-center justify-center shrink-0 text-rose-700">
+                        <AlertTriangle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-rose-900 tracking-wide">
+                          6. Zona de Perigo &bull; Reset Geral do Banco de Dados
+                        </h4>
+                        <p className="text-[11px] text-rose-800 leading-relaxed font-medium mt-0.5">
+                          Esta ação irá <strong>apagar permanentemente todos os registros de despachos e ocorrências</strong>, limpar as escalas operacionais e <strong>retornar o status de todas as viaturas para DISPONÍVEL</strong> tanto localmente quanto no <strong>Supabase Cloud</strong>. Esta ação não pode ser desfeita.
+                        </p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSolicitarResetBanco} className="flex items-center gap-3 flex-wrap pt-2 border-t border-rose-200">
+                      <div className="flex-1 min-w-[200px]">
+                        <input
+                          type="password"
+                          value={senhaReset}
+                          onChange={e => setSenhaReset(e.target.value)}
+                          placeholder="Digite a senha administrativa para confirmar"
+                          className="w-full px-3 py-2 text-xs border border-rose-300 rounded-xl bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-700"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={resetando}
+                        className="py-2 px-5 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>{resetando ? 'Resetando...' : 'Resetar Banco de Dados'}</span>
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 5: SUPABASE */}
+              {activeTab === 'supabase' && (
+                <div className="space-y-6">
+                  {/* Status Banner */}
+                  <div className={`p-4 rounded-xl border flex items-center justify-between ${
+                    statusConexao.ok
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      {statusConexao.ok ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      ) : (
+                        <AlertTriangle className="w-5 h-5 text-amber-600" />
+                      )}
+                      <div>
+                        <div className="text-xs font-bold">{statusConexao.msg}</div>
+                        <div className="text-[11px] opacity-80">
+                          {statusConexao.ok
+                            ? 'O SICOVI está apto a persistir viaturas, militares e registros na nuvem.'
+                            : 'O sistema está em modo local. Insira suas credenciais abaixo para conectar com o Supabase.'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleTestarSupabase}
+                      className="px-3 py-1.5 bg-white text-slate-800 rounded-lg text-xs font-bold border border-slate-200 shadow-sm flex items-center gap-1.5 cursor-pointer hover:bg-slate-50"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Testar Conexão
+                    </button>
+                  </div>
+
+                  {/* Form de Credenciais */}
+                  <div className="bg-slate-50 p-4 border border-slate-200 rounded-xl space-y-3">
+                    <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+                      <Database className="w-4 h-4 text-emerald-600" /> Credenciais do Projeto Supabase
+                    </h4>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Project URL</label>
+                      <input
+                        type="text"
+                        value={supaUrl}
+                        onChange={e => setSupaUrl(e.target.value)}
+                        placeholder="https://xyz.supabase.co"
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Anon Public API Key</label>
+                      <input
+                        type="password"
+                        value={supaKey}
+                        onChange={e => setSupaKey(e.target.value)}
+                        placeholder="eyJhbGciOi..."
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-mono"
+                      />
+                    </div>
+                    <div className="flex gap-2 justify-end pt-1 flex-wrap">
+                      <button
+                        onClick={handleSalvarConfigSupabase}
+                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer shadow-xs"
+                      >
+                        Salvar Credenciais
+                      </button>
+                      {statusConexao.ok && (
+                        <>
+                          <button
+                            onClick={handleSincronizarSupabase}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" /> Sincronizar da Nuvem
+                          </button>
+                          <button
+                            onClick={handleEnviarTudoParaSupabase}
+                            disabled={enviandoTudo}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm"
+                          >
+                            <Upload className="w-3.5 h-3.5" /> {enviandoTudo ? 'Enviando...' : 'Subir Dados Locais para Supabase'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Script SQL */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-800 uppercase">
+                        Script SQL para Criação das Tabelas
+                      </h4>
+                      <button
+                        onClick={handleCopiarSql}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
+                      >
+                        {copiadoSql ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiadoSql ? 'Copiado!' : 'Copiar Script SQL'}</span>
+                      </button>
+                    </div>
+                    <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-[11px] font-mono overflow-x-auto max-h-48 border border-slate-800">
+                      <code>{`-- SICOVI - Schema Supabase
+CREATE TABLE IF NOT EXISTS public.viaturas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    prefixo VARCHAR(50) UNIQUE NOT NULL,
+    categoria VARCHAR(50) NOT NULL DEFAULT 'GERAL',
+    status VARCHAR(50) NOT NULL DEFAULT 'DISPONÍVEL',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.militares (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(100) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.operadores (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario VARCHAR(100) UNIQUE NOT NULL,
+    senha_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.registros (
+    id BIGSERIAL PRIMARY KEY,
+    viatura VARCHAR(50) NOT NULL,
+    condutor VARCHAR(100) NOT NULL,
+    equipe TEXT,
+    destino VARCHAR(150) NOT NULL,
+    bairro VARCHAR(100),
+    rai VARCHAR(50),
+    natureza VARCHAR(150),
+    saida TIMESTAMP WITH TIME ZONE NOT NULL,
+    km_saida INTEGER NOT NULL,
+    chegada TIMESTAMP WITH TIME ZONE,
+    km_chegada INTEGER,
+    operador VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);`}</code>
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="px-6 py-3 bg-slate-100 border-t border-slate-200 flex justify-between items-center text-xs">
+          <span className="text-slate-500 font-semibold">
+            {autenticado ? 'Sessão administrativa ativa' : 'Sessão bloqueada'}
+          </span>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+
+      {/* System Alert & Confirmation Modal */}
+      <SystemAlertModal
+        isOpen={alertModal.isOpen}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+        confirmText={alertModal.confirmText}
+        cancelText={alertModal.cancelText}
+        onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={alertModal.onConfirm}
+      />
+    </div>
+  );
+};

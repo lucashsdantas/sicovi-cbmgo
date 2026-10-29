@@ -1,0 +1,6 @@
+{
+  "name": "SICOVI - Sistema de Controle de Viaturas",
+  "description": "Sistema de controle operacional de viaturas, escalas de guarnições, despachos e relatórios de deslocamento.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
