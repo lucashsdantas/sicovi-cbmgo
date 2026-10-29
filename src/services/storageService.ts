@@ -174,6 +174,20 @@ export function formatarNomeMilitarLimpo(nome: string): string {
   return str.trim();
 }
 
+/**
+ * Verifica se o destino do deslocamento é uma Ocorrência
+ * Considera apenas os destinos com valor "OCORRÊNCIA, ocorrência" (com ou sem acentuação, case-insensitive).
+ */
+export function isDestinoOcorrencia(destino?: string | null): boolean {
+  if (!destino || typeof destino !== 'string') return false;
+  const limpo = destino
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return limpo === 'ocorrencia';
+}
+
 export function limparListaMilitaresValidos(lista: string[]): string[] {
   if (!Array.isArray(lista)) return [];
   const invalidos = ['', 'null', 'undefined', '-', '--', '---', '#n/a', '#ref!', '#valor!', 'nenhum'];

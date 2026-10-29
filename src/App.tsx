@@ -14,7 +14,8 @@ import {
   storageService,
   parseDateTimeFormat,
   getAgoraBrasilia,
-  formatarIsoParaInputLocal
+  formatarIsoParaInputLocal,
+  isDestinoOcorrencia
 } from './services/storageService';
 import { isSupabaseConfigured } from './services/supabaseClient';
 import { soundEffects } from './utils/soundEffects';
@@ -511,16 +512,8 @@ export default function App() {
         km += kc - ks;
       }
 
-      const dest = (r.destino || '').toLowerCase();
-      const rai = (r.rai || '').trim();
-      const nat = (r.natureza || '').toLowerCase().trim();
-      if (
-        rai !== '' ||
-        dest.includes('ocorrência') ||
-        dest.includes('ocorrencia') ||
-        dest.includes('qrf') ||
-        (nat !== '' && !nat.includes('abastecimento') && !nat.includes('obm'))
-      ) {
+      // Contador de ocorrências atendidas: considera apenas os deslocamentos cujo destino esteja como "OCORRÊNCIA, ocorrência" com ou sem acentuação
+      if (isDestinoOcorrencia(r.destino)) {
         ocorr++;
       }
     });
@@ -771,6 +764,7 @@ export default function App() {
           onBairrosChange={() => {
             showToast('Bairros Atualizados', 'Lista de bairros/cidades importada com sucesso!');
           }}
+          onOpenQrCodes={() => setIsQrCodeModalOpen(true)}
         />
       </>
     );
@@ -828,7 +822,6 @@ export default function App() {
           setModoAmbiente('mobile');
           sessionStorage.setItem('sicovi_modo_ambiente', 'mobile');
         }}
-        onOpenQrCodes={() => setIsQrCodeModalOpen(true)}
         isSyncing={isSyncing}
         syncProgress={syncProgress}
       />
@@ -850,7 +843,6 @@ export default function App() {
             <FleetSection
               viaturas={viaturas}
               onSelectVehicle={handleSelectVehicleFromFleet}
-              onOpenQrCodes={() => setIsQrCodeModalOpen(true)}
             />
 
             {/* Command Hub */}
@@ -1142,6 +1134,7 @@ export default function App() {
         onBairrosChange={() => {
           showToast('Bairros Atualizados', 'Lista de bairros/cidades importada com sucesso!');
         }}
+        onOpenQrCodes={() => setIsQrCodeModalOpen(true)}
       />
 
       {/* Modal de Confirmação de Sucesso ao Salvar no Banco de Dados */}

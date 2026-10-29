@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { RegistroDespacho, ViaturaItem, StatTipoItem } from '../types/sicovi';
-import { parseDateTimeFormat, formatarDataHoraPtBr } from '../services/storageService';
+import { parseDateTimeFormat, formatarDataHoraPtBr, isDestinoOcorrencia } from '../services/storageService';
 import {
   Filter,
   RotateCcw,
@@ -180,8 +180,7 @@ export const StatisticsView: React.FC<StatisticsViewProps> = ({
 
     registrosFiltrados.forEach(r => {
       if (r.viatura) vtrsSet.add(r.viatura.trim().toUpperCase());
-      const dest = (r.destino || '').toUpperCase();
-      if (dest.includes('OCORR') || dest === 'OCORRÊNCIA' || dest === 'OCORRENCIA') tOcorr++;
+      if (isDestinoOcorrencia(r.destino)) tOcorr++;
 
       const ks = Number(r.kmSaida);
       const kc = Number(r.kmChegada);

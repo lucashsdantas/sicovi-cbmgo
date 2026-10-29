@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, KeyRound, ShieldCheck, Smartphone, QrCode } from 'lucide-react';
+import { LogOut, KeyRound, ShieldCheck, Smartphone } from 'lucide-react';
 
 interface HeaderProps {
   operador: string;
@@ -9,7 +9,6 @@ interface HeaderProps {
   onOpenChangePassword: () => void;
   onOpenManagerial?: () => void;
   onSwitchToMobile?: () => void;
-  onOpenQrCodes?: () => void;
   isSyncing: boolean;
   syncProgress: number;
 }
@@ -22,7 +21,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenChangePassword,
   onOpenManagerial,
   onSwitchToMobile,
-  onOpenQrCodes,
   isSyncing,
   syncProgress
 }) => {
@@ -88,19 +86,6 @@ export const Header: React.FC<HeaderProps> = ({
             />
             <span>{isSyncing ? 'Sincronizando...' : 'Sincronizado'}</span>
           </div>
-
-          {/* Botão de QR Codes para Viaturas */}
-          {onOpenQrCodes && (
-            <button
-              type="button"
-              onClick={onOpenQrCodes}
-              className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
-              title="Gerar e imprimir QR Codes das viaturas"
-            >
-              <QrCode className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden md:inline">QR Codes</span>
-            </button>
-          )}
 
           {/* Botão de Alternar para Versão Mobile */}
           {onSwitchToMobile && (

@@ -1,14 +1,13 @@
 import React from 'react';
 import { ViaturaItem } from '../types/sicovi';
-import { Ambulance, Truck, Car, LayoutGrid, QrCode } from 'lucide-react';
+import { Ambulance, Truck, Car, LayoutGrid } from 'lucide-react';
 
 interface FleetSectionProps {
   viaturas: ViaturaItem[];
   onSelectVehicle: (prefixo: string, status: string) => void;
-  onOpenQrCodes?: () => void;
 }
 
-export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, onSelectVehicle, onOpenQrCodes }) => {
+export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, onSelectVehicle }) => {
   // 1. RESGATE: apenas viaturas de Resgate
   const resgateViaturas = viaturas.filter(v => {
     const c = (v.categoria || '').trim().toUpperCase();
@@ -89,18 +88,6 @@ export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, onSelectVe
             Clique em qualquer viatura para despachar saída ou registrar retorno
           </p>
         </div>
-
-        {onOpenQrCodes && (
-          <button
-            type="button"
-            onClick={onOpenQrCodes}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            title="Gerar e imprimir QR Codes das viaturas para colar no painel da viatura"
-          >
-            <QrCode className="w-4 h-4 text-amber-400" />
-            <span>QR Codes das Viaturas</span>
-          </button>
-        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">

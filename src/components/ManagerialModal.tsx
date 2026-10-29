@@ -20,7 +20,8 @@ import {
   MapPin,
   UserCheck,
   Hash,
-  Sparkles
+  Sparkles,
+  QrCode
 } from 'lucide-react';
 import { ViaturaItem } from '../types/sicovi';
 import { storageService, formatarNomeMilitarLimpo, corrigirAcentuacaoTexto } from '../services/storageService';
@@ -44,6 +45,7 @@ interface ManagerialModalProps {
   onRegistrosChange?: () => void;
   onOperadoresChange?: (ops: string[]) => void;
   onBairrosChange?: (bairros: string[]) => void;
+  onOpenQrCodes?: () => void;
 }
 
 export const ManagerialModal: React.FC<ManagerialModalProps> = ({
@@ -56,7 +58,8 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
   onMilitaresChange,
   onRegistrosChange,
   onOperadoresChange,
-  onBairrosChange
+  onBairrosChange,
+  onOpenQrCodes
 }) => {
   const [autenticado, setAutenticado] = useState(false);
   const [senhaInput, setSenhaInput] = useState('');
@@ -681,12 +684,26 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {autenticado && onOpenQrCodes && (
+              <button
+                type="button"
+                onClick={onOpenQrCodes}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer"
+                title="Gerar e imprimir QR Codes das viaturas para fixação no painel"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Gerar QR Codes das Viaturas</span>
+                <span className="sm:hidden">QR Codes</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -779,6 +796,18 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
               >
                 <Database className="w-4 h-4 text-emerald-600" /> Supabase
               </button>
+
+              {onOpenQrCodes && (
+                <button
+                  type="button"
+                  onClick={onOpenQrCodes}
+                  className="flex items-center gap-2 px-3.5 py-2 text-xs font-black border-b-2 border-transparent text-amber-900 bg-amber-100/80 hover:bg-amber-200/90 rounded-t-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ml-auto"
+                  title="Gerar e imprimir QR Codes das viaturas para fixação no painel"
+                >
+                  <QrCode className="w-4 h-4 text-amber-700" />
+                  <span>Gerar QR Codes</span>
+                </button>
+              )}
             </div>
 
             {/* Tab Body */}
@@ -786,6 +815,34 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
               {/* ABA 1: VIATURAS */}
               {activeTab === 'viaturas' && (
                 <div className="space-y-6">
+                  {/* Banner Gerador de QR Code exclusivo administrativo */}
+                  <div className="bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50 border-2 border-amber-400/60 rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap shadow-2xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-sm font-black">
+                        <QrCode className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-amber-950 flex items-center gap-2">
+                          <span>QR Codes das Viaturas para Painel</span>
+                          <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.2 rounded-full font-bold">Exclusivo Administrativo</span>
+                        </h4>
+                        <p className="text-[11px] text-amber-900/80 font-medium">
+                          Gere, baixe imagens PNG individuais ou imprima a folha de etiquetas com os QR Codes de todas as viaturas para fixar no painel interno.
+                        </p>
+                      </div>
+                    </div>
+                    {onOpenQrCodes && (
+                      <button
+                        type="button"
+                        onClick={onOpenQrCodes}
+                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+                      >
+                        <QrCode className="w-4 h-4 text-amber-400" />
+                        <span>Gerar e Imprimir QR Codes</span>
+                      </button>
+                    )}
+                  </div>
+
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                     <h4 className="text-xs font-black uppercase text-slate-800 mb-3 flex items-center gap-2">
                       <Plus className="w-4 h-4 text-red-700" /> Cadastrar Viatura
