@@ -438,6 +438,16 @@ export const storageService = {
   setMilitares(militares: string[]): void {
     localStorage.setItem(STORAGE_KEY_MILITARES, JSON.stringify(militares));
     syncComServidorCentral({ militares });
+
+    // Persiste ordem de antiguidade no Supabase
+    const sb = getSupabase();
+    if (sb && militares.length > 0) {
+      const payload = militares.map((nome, idx) => ({
+        nome,
+        antiguidade: idx + 1
+      }));
+      Promise.resolve(sb.from('militares').upsert(payload, { onConflict: 'nome' })).catch(() => {});
+    }
   },
 
   cadastrarOperador(usuario: string, senha = '123456'): void {
@@ -1840,13 +1850,17 @@ export const storageService = {
         this.setViaturas(vtrsFormatadas);
       }
 
-      // 2. Militares
-      let queryMils = sb.from('militares').select('nome');
+      // 2. Militares (ordenados estritamente pela antiguidade pré-definida)
       try {
-        const { data: mils, error: errMils } = await queryMils.order('created_at', { ascending: true });
+        const { data: mils, error: errMils } = await sb.from('militares').select('nome, antiguidade').order('antiguidade', { ascending: true });
         if (!errMils && mils && mils.length > 0) {
           const listaMils = mils.map((m: any) => m.nome).filter(Boolean);
           this.setMilitares(listaMils);
+        } else {
+          const { data: milsFallback } = await sb.from('militares').select('nome').order('created_at', { ascending: true });
+          if (milsFallback && milsFallback.length > 0) {
+            this.setMilitares(milsFallback.map((m: any) => m.nome).filter(Boolean));
+          }
         }
       } catch {
         const { data: mils } = await sb.from('militares').select('nome');

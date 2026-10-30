@@ -97,6 +97,16 @@ export const EscalaModal: React.FC<EscalaModalProps> = ({
       .map(([prefixo, r]) => ({ prefixo, ...r }));
   }, [rascunhos]);
 
+  // Apenas viaturas escaladas (com condutor e/ou combatentes na equipe)
+  const viaturasEscaladas = useMemo(() => {
+    return viaturasOrdenadas.filter(vtr => {
+      const rasc = rascunhos[vtr.prefixo];
+      const temCondutor = Boolean(rasc?.condutor && rasc.condutor.trim());
+      const temEquipe = Boolean(rasc?.combatentes && rasc.combatentes.length > 0);
+      return temCondutor || temEquipe;
+    });
+  }, [viaturasOrdenadas, rascunhos]);
+
   const hasUnsavedChanges = viaturasModificadas.length > 0;
 
   // Tentativa de fechar: só fecha direto se não houver alterações pendentes
@@ -696,11 +706,11 @@ export const EscalaModal: React.FC<EscalaModalProps> = ({
             </div>
           </div>
 
-          {/* PASSO 3: QUADRO GERAL DAS ESCALAS (Em Ordem Alfabética) */}
+          {/* PASSO 3: QUADRO GERAL DAS ESCALAS (Apenas Viaturas Escaladas) */}
           <div className="pt-3 border-t border-slate-200">
             <div className="flex items-center justify-between mb-2.5">
               <div className="text-xs font-black uppercase text-slate-700">
-                3. Quadro Geral das Escalas ({viaturasOrdenadas.length} Viaturas em Ordem Alfabética)
+                3. Quadro Geral das Escalas ({viaturasEscaladas.length} Viatura{viaturasEscaladas.length === 1 ? '' : 's'} Escalada{viaturasEscaladas.length === 1 ? '' : 's'})
               </div>
               {hasUnsavedChanges && (
                 <button
@@ -714,59 +724,65 @@ export const EscalaModal: React.FC<EscalaModalProps> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin">
-              {viaturasOrdenadas.map(vtr => {
-                const rasc = rascunhos[vtr.prefixo];
-                const isSelected = selectedViatura === vtr.prefixo;
-                const condutorNome = rasc?.condutor || '';
-                const equipeNomes = rasc?.combatentes ? rasc.combatentes.join(', ') : '';
-                const isModificado = rasc?.modificado;
+            {viaturasEscaladas.length === 0 ? (
+              <div className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-center text-xs text-slate-500 font-medium">
+                Nenhuma viatura escalada com motorista ou equipe no momento. Selecione uma viatura acima para definir o condutor e a equipe da guarnição.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin">
+                {viaturasEscaladas.map(vtr => {
+                  const rasc = rascunhos[vtr.prefixo];
+                  const isSelected = selectedViatura === vtr.prefixo;
+                  const condutorNome = rasc?.condutor || '';
+                  const equipeNomes = rasc?.combatentes ? rasc.combatentes.join(', ') : '';
+                  const isModificado = rasc?.modificado;
 
-                return (
-                  <button
-                    key={vtr.prefixo}
-                    type="button"
-                    onClick={() => setSelectedViatura(vtr.prefixo)}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-amber-50/80 border-amber-500 shadow-xs ring-2 ring-amber-400/40'
-                        : isModificado
-                        ? 'bg-amber-50/30 border-amber-300'
-                        : 'bg-white border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-extrabold text-xs text-slate-900">{vtr.prefixo}</span>
-                        {isModificado && (
-                          <span
-                            className="w-2 h-2 rounded-full bg-amber-500"
-                            title="Alteração pendente de gravação"
-                          />
-                        )}
+                  return (
+                    <button
+                      key={vtr.prefixo}
+                      type="button"
+                      onClick={() => setSelectedViatura(vtr.prefixo)}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-50/80 border-amber-500 shadow-xs ring-2 ring-amber-400/40'
+                          : isModificado
+                          ? 'bg-amber-50/30 border-amber-300'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-extrabold text-xs text-slate-900">{vtr.prefixo}</span>
+                          {isModificado && (
+                            <span
+                              className="w-2 h-2 rounded-full bg-amber-500"
+                              title="Alteração pendente de gravação"
+                            />
+                          )}
+                        </div>
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            isModificado
+                              ? 'bg-amber-100 text-amber-900 font-black'
+                              : condutorNome
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {isModificado ? 'Pendente' : condutorNome ? 'Escalado' : 'Equipe'}
+                        </span>
                       </div>
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                          isModificado
-                            ? 'bg-amber-100 text-amber-900 font-black'
-                            : condutorNome
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-slate-100 text-slate-500'
-                        }`}
-                      >
-                        {isModificado ? 'Pendente' : condutorNome ? 'Escalado' : 'Vazio'}
-                      </span>
-                    </div>
-                    <div className="text-[11px] font-bold text-blue-700 truncate">
-                      🚗 {condutorNome || 'Sem Condutor'}
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">
-                      🧑‍🚒 {equipeNomes || 'Sem equipe'}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                      <div className="text-[11px] font-bold text-blue-700 truncate">
+                        🚗 {condutorNome || 'Sem Condutor'}
+                      </div>
+                      <div className="text-[10px] text-slate-500 truncate">
+                        🧑‍🚒 {equipeNomes || 'Sem equipe'}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 

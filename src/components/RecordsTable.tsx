@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { RegistroDespacho } from '../types/sicovi';
-import { Edit, Trash2, FilterX, Check, AlertCircle, Clock } from 'lucide-react';
+import { Edit, Trash2, FilterX, Check, AlertCircle, Clock, Copy } from 'lucide-react';
 
 interface ColumnFilters {
   id: string;
@@ -39,6 +39,27 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({
   onClearColumnFilters,
   recentlySavedId
 }) => {
+  const [copiadoRaiId, setCopiadoRaiId] = useState<number | string | null>(null);
+
+  const handleCopiarRai = (id: number | string, rai: string) => {
+    if (!rai || rai === '---') return;
+    try {
+      navigator.clipboard.writeText(rai.trim());
+      setCopiadoRaiId(id);
+      setTimeout(() => setCopiadoRaiId(null), 2000);
+    } catch {
+      // Fallback para ambientes sem navigator.clipboard
+      const textArea = document.createElement('textarea');
+      textArea.value = rai.trim();
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiadoRaiId(id);
+      setTimeout(() => setCopiadoRaiId(null), 2000);
+    }
+  };
+
   const totalPages = Math.ceil(registros.length / pageSize) || 1;
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedItems = registros.slice(startIndex, startIndex + pageSize);
@@ -222,9 +243,35 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({
                       {linha.bairro || '---'}
                     </td>
                     <td className="py-2 px-3 text-center whitespace-nowrap">
-                      <span className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">
-                        {linha.rai || '---'}
-                      </span>
+                      {linha.rai && linha.rai !== '---' ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopiarRai(linha.id, linha.rai);
+                          }}
+                          className={`inline-flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded border transition-all cursor-pointer ${
+                            copiadoRaiId === linha.id
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold scale-105 shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 active:scale-95'
+                          }`}
+                          title="Clique para copiar o número do RAI"
+                        >
+                          {copiadoRaiId === linha.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-700 inline" />
+                              <span>Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3 text-slate-400 group-hover:text-slate-600 inline" />
+                              <span>{linha.rai}</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <span className="font-mono text-[11px] text-slate-400">---</span>
+                      )}
                     </td>
                     <td className="py-2 px-3 text-slate-700 min-w-[130px] break-words">
                       {linha.natureza || '---'}

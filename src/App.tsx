@@ -220,11 +220,13 @@ export default function App() {
       const mils = storageService.getMilitares();
       const ops = storageService.getOperadores();
       const regs = storageService.getRegistros();
+      const esc = storageService.getEscalas();
 
       setViaturas(vtrs);
       setMilitares(mils);
       setOperadores(ops);
       setRegistros(regs);
+      setEscalas(esc);
 
       const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000;
       const temRecentes = regs.some(r => {
@@ -243,6 +245,7 @@ export default function App() {
             setMilitares(storageService.getMilitares());
             setOperadores(storageService.getOperadores());
             setRegistros(regsAtualizados);
+            setEscalas(storageService.getEscalas());
             if (regsAtualizados.length > 0) {
               const temRecentesSupabase = regsAtualizados.some(r => {
                 const dt = parseDateTimeFormat(r.saida);
@@ -315,11 +318,15 @@ export default function App() {
               if (res.success) {
                 setRegistros([...storageService.getRegistros()]);
                 setViaturas([...storageService.getViaturas()]);
+                setEscalas([...storageService.getEscalas()]);
+                setMilitares([...storageService.getMilitares()]);
               }
             });
           } else {
             setRegistros([...storageService.getRegistros()]);
             setViaturas([...storageService.getViaturas()]);
+            setEscalas([...storageService.getEscalas()]);
+            setMilitares([...storageService.getMilitares()]);
           }
 
           setTimeout(() => {

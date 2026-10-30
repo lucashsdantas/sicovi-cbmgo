@@ -746,49 +746,22 @@ export const DispatchModal: React.FC<DispatchModalProps> = ({
                 />
               </div>
 
-              {/* 2. Natureza da Ocorrência - Segunda posição com Histórico e Preenchimento Rápido */}
+              {/* 2. Natureza da Ocorrência - Segunda posição com Histórico Integrado no Campo (Datalist) */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-bold text-slate-700">Natureza da Ocorrência</label>
-                  <span className="text-[10px] text-slate-400 font-medium">Histórico / Preenchimento rápido</span>
-                </div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Natureza da Ocorrência</label>
                 <input
                   type="text"
                   list="datalist-naturezas"
                   value={natureza}
                   onChange={e => setNatureza(e.target.value)}
-                  placeholder="Selecione ou digite (Ex: APH Clínico...)"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:border-red-700"
+                  placeholder="Selecione ou digite (Ex: APH Clínico, Incêndio...)"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:border-red-700 font-medium"
                 />
                 <datalist id="datalist-naturezas">
                   {naturezasHistorico.map(nat => (
                     <option key={nat} value={nat} />
                   ))}
                 </datalist>
-
-                {/* Preenchimento rápido com histórico das naturezas já registradas */}
-                {naturezasHistorico.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5 max-h-16 overflow-y-auto pt-0.5">
-                    {naturezasHistorico.slice(0, 6).map(nat => {
-                      const selecionado = natureza.trim().toLowerCase() === nat.trim().toLowerCase();
-                      return (
-                        <button
-                          key={nat}
-                          type="button"
-                          onClick={() => setNatureza(nat)}
-                          className={`text-[10px] px-2 py-0.5 rounded-md border transition-all cursor-pointer truncate max-w-[170px] ${
-                            selecionado
-                              ? 'bg-red-700 text-white border-red-700 font-bold shadow-xs'
-                              : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
-                          }`}
-                          title={nat}
-                        >
-                          {nat}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
             </div>
           </div>

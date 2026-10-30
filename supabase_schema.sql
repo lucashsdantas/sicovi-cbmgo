@@ -31,9 +31,11 @@ CREATE TABLE IF NOT EXISTS public.militares (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nome VARCHAR(100) UNIQUE NOT NULL,
     graduacao VARCHAR(50) DEFAULT '',
+    antiguidade INTEGER DEFAULT 0,
     ativo BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_militares_antiguidade ON public.militares(antiguidade ASC);
 
 -- ----------------------------------------------------------------------------
 -- 3. TABELA DE OPERADORES / USUÁRIOS E SENHAS

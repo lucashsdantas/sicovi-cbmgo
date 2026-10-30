@@ -21,7 +21,11 @@ import {
   UserCheck,
   Hash,
   Sparkles,
-  QrCode
+  QrCode,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown
 } from 'lucide-react';
 import { ViaturaItem } from '../types/sicovi';
 import { storageService, formatarNomeMilitarLimpo, corrigirAcentuacaoTexto } from '../services/storageService';
@@ -77,6 +81,26 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
   // Militar form state
   const [novoMilitarNome, setNovoMilitarNome] = useState('');
   const [msgMilitar, setMsgMilitar] = useState('');
+  const [buscaMilitarAntiguidade, setBuscaMilitarAntiguidade] = useState('');
+  const [draggedMilitarIndex, setDraggedMilitarIndex] = useState<number | null>(null);
+  const [dragOverMilitarIndex, setDragOverMilitarIndex] = useState<number | null>(null);
+
+  const handleReordenarMilitares = (origemIdx: number, destinoIdx: number) => {
+    if (origemIdx === destinoIdx || origemIdx < 0 || destinoIdx < 0 || origemIdx >= militares.length || destinoIdx >= militares.length) return;
+    const novaLista = [...militares];
+    const [removido] = novaLista.splice(origemIdx, 1);
+    novaLista.splice(destinoIdx, 0, removido);
+    onMilitaresChange(novaLista);
+    storageService.setMilitares(novaLista);
+    soundEffects.playSuccess();
+  };
+
+  const handleMudarPosicaoAntiguidade = (idxAtual: number, valorInput: string) => {
+    const num = parseInt(valorInput, 10);
+    if (isNaN(num)) return;
+    const destinoIdx = Math.max(0, Math.min(militares.length - 1, num - 1));
+    handleReordenarMilitares(idxAtual, destinoIdx);
+  };
 
   // Reset password state with textual search
   const [filtroMilitarSenha, setFiltroMilitarSenha] = useState('');
@@ -169,6 +193,17 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
     const t = filtroMilitarSenha.toLowerCase().trim();
     return listaMilitarParaSenha.filter(m => m.toLowerCase().includes(t));
   }, [listaMilitarParaSenha, filtroMilitarSenha]);
+
+  // Lista de militares com índice de antiguidade e filtro de busca
+  const militaresFiltradosAntiguidade = useMemo(() => {
+    if (!buscaMilitarAntiguidade.trim()) {
+      return militares.map((nome, index) => ({ nome, antiguidade: index + 1, originalIndex: index }));
+    }
+    const termo = buscaMilitarAntiguidade.toLowerCase().trim();
+    return militares
+      .map((nome, index) => ({ nome, antiguidade: index + 1, originalIndex: index }))
+      .filter(item => item.nome.toLowerCase().includes(termo));
+  }, [militares, buscaMilitarAntiguidade]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -778,7 +813,7 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
         ) : (
           <div className="flex flex-col flex-1 overflow-hidden">
             {/* Tabs */}
-            <div className="flex border-b border-slate-200 bg-slate-50 px-6 gap-2 pt-3 overflow-x-auto">
+            <div className="flex border-b border-slate-200 bg-slate-50 px-6 gap-2 pt-3 overflow-x-auto shrink-0 relative z-30 shadow-2xs select-none">
               <button
                 onClick={() => setActiveTab('viaturas')}
                 className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
@@ -991,12 +1026,13 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                 </div>
               )}
 
-              {/* ABA 2: MILITARES */}
+              {/* ABA 2: MILITARES & QUADRO DE ANTIGUIDADE */}
               {activeTab === 'militares' && (
-                <div className="space-y-6">
+                <div className="space-y-5">
+                  {/* Cadastrar Novo Militar */}
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                     <h4 className="text-xs font-black uppercase text-slate-800 mb-3 flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-red-700" /> Cadastrar Novo Militar
+                      <Plus className="w-4 h-4 text-red-700" /> Cadastrar Novo Militar na OBM
                     </h4>
                     {msgMilitar && (
                       <div className="p-2 mb-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-lg flex items-center gap-2">
@@ -1006,42 +1042,192 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                     <form onSubmit={handleAdicionarMilitar} className="flex gap-3 items-end">
                       <div className="flex-1">
                         <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                          Nome / Posto / Graduação
+                          Posto / Graduação / Nome Completo
                         </label>
                         <input
                           type="text"
                           value={novoMilitarNome}
                           onChange={e => setNovoMilitarNome(e.target.value)}
-                          placeholder="Ex: Cb Costa, 1º Sgt Silva, Sd Souza"
+                          placeholder="Ex: 2º Ten Cardoso, 1º Sgt Silva, Cb Costa, Sd Souza..."
                           required
                           className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-semibold"
                         />
                       </div>
                       <button
                         type="submit"
-                        className="py-2 px-5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm"
+                        className="py-2 px-5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
                       >
-                        <Plus className="w-4 h-4" /> Salvar Militar
+                        <Plus className="w-4 h-4" /> Cadastrar Militar
                       </button>
                     </form>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                    {militares.map(m => (
-                      <div
-                        key={m}
-                        className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg text-xs hover:border-slate-300"
-                      >
-                        <span className="font-bold text-slate-800">{m}</span>
-                        <button
-                          onClick={() => handleExcluirMilitar(m)}
-                          className="text-slate-300 hover:text-rose-600 p-1 cursor-pointer transition-colors"
-                          title="Remover Militar"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                  {/* Quadro Geral de Antiguidade dos Militares */}
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-slate-900 flex items-center gap-2">
+                          <Users className="w-4 h-4 text-red-700" />
+                          <span>Banco de Militares &bull; Ordem de Antiguidade ({militares.length} Militares)</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                          Arraste pela alça <strong className="text-slate-700">⠿</strong>, altere o número da coluna <strong className="text-slate-700">Antiguidade</strong> ou use as setas para definir a ordem hierárquica. Esta sequência orienta todas as telas de escala e despacho.
+                        </p>
                       </div>
-                    ))}
+
+                      {/* Busca rápida na lista */}
+                      <div className="relative min-w-[200px]">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={buscaMilitarAntiguidade}
+                          onChange={e => setBuscaMilitarAntiguidade(e.target.value)}
+                          placeholder="Filtrar por nome/graduação..."
+                          className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-red-700"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-700 uppercase font-black text-[10px] tracking-wider border-b border-slate-200 sticky top-0 z-10">
+                            <th className="py-2.5 px-3 text-center w-[130px]">Antiguidade</th>
+                            <th className="py-2.5 px-2 text-center w-[50px]">Arrastar</th>
+                            <th className="py-2.5 px-4">Posto / Graduação / Nome</th>
+                            <th className="py-2.5 px-3 text-center w-[90px]">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          {militaresFiltradosAntiguidade.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-8 text-center text-slate-400 font-medium text-xs">
+                                Nenhum militar encontrado com o filtro aplicado.
+                              </td>
+                            </tr>
+                          ) : (
+                            militaresFiltradosAntiguidade.map(item => {
+                              const origIdx = item.originalIndex;
+                              const isDragging = draggedMilitarIndex === origIdx;
+                              const isOver = dragOverMilitarIndex === origIdx;
+
+                              return (
+                                <tr
+                                  key={item.nome}
+                                  draggable={!buscaMilitarAntiguidade}
+                                  onDragStart={(e) => {
+                                    setDraggedMilitarIndex(origIdx);
+                                    e.dataTransfer.effectAllowed = 'move';
+                                  }}
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    if (dragOverMilitarIndex !== origIdx) {
+                                      setDragOverMilitarIndex(origIdx);
+                                    }
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedMilitarIndex(null);
+                                    setDragOverMilitarIndex(null);
+                                  }}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    if (draggedMilitarIndex !== null && draggedMilitarIndex !== origIdx) {
+                                      handleReordenarMilitares(draggedMilitarIndex, origIdx);
+                                    }
+                                    setDraggedMilitarIndex(null);
+                                    setDragOverMilitarIndex(null);
+                                  }}
+                                  className={`transition-colors select-none ${
+                                    isDragging
+                                      ? 'opacity-40 bg-slate-100'
+                                      : isOver
+                                      ? 'bg-red-50 border-t-2 border-red-600'
+                                      : 'hover:bg-slate-50'
+                                  }`}
+                                >
+                                  {/* Coluna Antiguidade: badge, input direto e setas ▲/▼ */}
+                                  <td className="py-2 px-3 text-center whitespace-nowrap">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <span className="font-mono font-black text-xs text-red-900 bg-red-50 border border-red-200 px-2 py-0.5 rounded min-w-[32px]">
+                                        #{item.antiguidade}
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max={militares.length}
+                                        defaultValue={item.antiguidade}
+                                        key={item.nome + '_' + item.antiguidade}
+                                        onBlur={(e) => handleMudarPosicaoAntiguidade(origIdx, e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            handleMudarPosicaoAntiguidade(origIdx, (e.currentTarget as HTMLInputElement).value);
+                                          }
+                                        }}
+                                        className="w-12 text-center text-xs font-bold border border-slate-300 rounded px-1 py-0.5 bg-white text-slate-800 focus:outline-none focus:border-red-700"
+                                        title="Digite o número e pressione Enter para alterar a antiguidade"
+                                      />
+                                      <div className="flex flex-col">
+                                        <button
+                                          type="button"
+                                          disabled={origIdx === 0}
+                                          onClick={() => handleReordenarMilitares(origIdx, origIdx - 1)}
+                                          className="text-[9px] text-slate-400 hover:text-slate-800 disabled:opacity-20 cursor-pointer leading-none p-0.5"
+                                          title="Subir de Antiguidade (Maior Precedência)"
+                                        >
+                                          ▲
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={origIdx === militares.length - 1}
+                                          onClick={() => handleReordenarMilitares(origIdx, origIdx + 1)}
+                                          className="text-[9px] text-slate-400 hover:text-slate-800 disabled:opacity-20 cursor-pointer leading-none p-0.5"
+                                          title="Descer de Antiguidade"
+                                        >
+                                          ▼
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </td>
+
+                                  {/* Coluna Alça de Arraste */}
+                                  <td className="py-2 px-2 text-center">
+                                    <div
+                                      className={`p-1 inline-flex items-center justify-center rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 ${
+                                        !buscaMilitarAntiguidade ? 'cursor-grab active:cursor-grabbing' : 'opacity-30 cursor-not-allowed'
+                                      }`}
+                                      title={!buscaMilitarAntiguidade ? 'Clique e arraste para reordenar' : 'Limpe a busca para arrastar'}
+                                    >
+                                      <GripVertical className="w-4 h-4" />
+                                    </div>
+                                  </td>
+
+                                  {/* Coluna Nome do Militar */}
+                                  <td className="py-2 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-extrabold text-xs text-slate-900">
+                                        {item.nome}
+                                      </span>
+                                    </div>
+                                  </td>
+
+                                  {/* Coluna Ações */}
+                                  <td className="py-2 px-3 text-center whitespace-nowrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleExcluirMilitar(item.nome)}
+                                      className="text-slate-300 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                                      title={`Remover ${item.nome} do banco de militares`}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1145,10 +1331,10 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
               {activeTab === 'planilhas' && (
                 <div className="space-y-6">
                   {/* Status do Banco de Dados Online (Supabase) */}
-                  <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 flex-wrap ${
+                  <div className={`relative z-0 p-3.5 rounded-2xl border flex items-center justify-between gap-3 flex-wrap ${
                     isSupabaseConfigured()
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-xs'
-                      : 'bg-amber-50 border-amber-300 text-amber-950 shadow-xs'
+                      ? 'bg-emerald-50/90 border-emerald-300 text-emerald-900 shadow-2xs'
+                      : 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-2xs'
                   }`}>
                     <div className="flex items-center gap-3">
                       <div className={`w-3.5 h-3.5 rounded-full shrink-0 ${isSupabaseConfigured() ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
