@@ -45,7 +45,7 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
-      <div className="overflow-x-auto max-h-[640px]">
+      <div className="overflow-x-auto overflow-y-auto max-h-[640px] relative">
         <table className="w-full min-w-[1280px] border-collapse text-xs">
           <thead>
             <tr className="bg-slate-100 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-slate-200 sticky top-0 z-20">

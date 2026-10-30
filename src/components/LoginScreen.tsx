@@ -29,17 +29,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     viaturaPredefinida ? 'mobile' : isMobileInitial ? 'mobile' : 'desktop'
   );
   const [lembrar, setLembrar] = useState(() => {
-    return localStorage.getItem('lembrarLogin') !== 'false';
+    return localStorage.getItem('lembrarLogin') === 'true';
   });
   const [usuarioInput, setUsuarioInput] = useState(() => {
-    const rem = localStorage.getItem('lembrarLogin') !== 'false';
+    const rem = localStorage.getItem('lembrarLogin') === 'true';
     if (!rem) return '';
-    return localStorage.getItem('ultimoOperador') || (operadores.length > 0 ? operadores[0] : '2º Sgt Dantas');
+    return localStorage.getItem('ultimoOperador') || '';
   });
   const [condutorInput, setCondutorInput] = useState(() => {
-    const rem = localStorage.getItem('lembrarLogin') !== 'false';
+    const rem = localStorage.getItem('lembrarLogin') === 'true';
     if (!rem) return '';
-    return localStorage.getItem('ultimoCondutor') || (militares.length > 0 ? militares[0] : '2º Sgt Dantas');
+    return localStorage.getItem('ultimoCondutor') || '';
   });
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [mostrarSugestoesCondutor, setMostrarSugestoesCondutor] = useState(false);
@@ -54,6 +54,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   // Ao montar, sincroniza dados do banco central e do Supabase para atualizar a lista de usuários no dropdown
   useEffect(() => {
+    setSenha('');
     storageService.carregarDoBancoCentral().then(() => {
       storageService.sincronizarComSupabase().catch(() => {});
     });
@@ -72,10 +73,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Combina lista de operadores cadastrados e militares cadastrados respeitando a antiguidade
+  // Combina militares cadastrados (ordem estrita de antiguidade/cadastro) e operadores adicionais
   const listaMilitarCompleta = useMemo(() => {
-    return Array.from(new Set([...operadores, ...militares])).filter(Boolean);
-  }, [operadores, militares]);
+    const list: string[] = [];
+    const seen = new Set<string>();
+    militares.forEach(m => {
+      const clean = (m || '').trim();
+      const k = clean.toLowerCase();
+      if (clean && !seen.has(k)) {
+        seen.add(k);
+        list.push(clean);
+      }
+    });
+    operadores.forEach(o => {
+      const clean = (o || '').trim();
+      const k = clean.toLowerCase();
+      if (clean && !seen.has(k)) {
+        seen.add(k);
+        list.push(clean);
+      }
+    });
+    return list;
+  }, [militares, operadores]);
 
   const militaresFiltrados = useMemo(() => {
     if (!usuarioInput.trim()) return listaMilitarCompleta;
@@ -146,6 +165,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         localStorage.removeItem('ultimoOperador');
       }
 
+      setSenha('');
       onLogin(res.usuario || militarEscolhido, 'desktop');
     } finally {
       setAutenticando(false);
@@ -176,6 +196,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         localStorage.removeItem('ultimoCondutor');
       }
 
+      setSenha('');
       onLogin(res.usuario || condutorEscolhido, 'mobile');
     } finally {
       setAutenticando(false);
@@ -347,6 +368,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       onChange={e => setSenha(e.target.value)}
                       placeholder="••••••••"
                       required
+                      autoComplete="off"
                       className="w-full pl-10 pr-10 py-2.5 text-xs border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:bg-white focus:outline-none focus:border-red-700 transition-colors"
                     />
                     <button
@@ -489,6 +511,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       onChange={e => setSenha(e.target.value)}
                       placeholder="••••••••"
                       required
+                      autoComplete="off"
                       className="w-full pl-10 pr-10 py-2.5 text-xs border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:bg-white focus:outline-none focus:border-red-700 transition-colors"
                     />
                     <button

@@ -385,15 +385,18 @@ export const storageService = {
 
   getViaturas(): ViaturaItem[] {
     const raw = localStorage.getItem(STORAGE_KEY_VIATURAS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY_VIATURAS, JSON.stringify(DEFAULT_VIATURAS));
-      return DEFAULT_VIATURAS;
+    let lista: ViaturaItem[] = DEFAULT_VIATURAS;
+    if (raw) {
+      try {
+        lista = JSON.parse(raw);
+      } catch {
+        lista = DEFAULT_VIATURAS;
+      }
     }
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return DEFAULT_VIATURAS;
-    }
+    // As viaturas da frota ficam estritamente classificadas em ordem alfabética por prefixo
+    return lista.slice().sort((a, b) =>
+      a.prefixo.localeCompare(b.prefixo, 'pt-BR', { numeric: true, sensitivity: 'base' })
+    );
   },
 
   setViaturas(viaturas: ViaturaItem[]): void {
@@ -466,6 +469,24 @@ export const storageService = {
       atuais.push(escala);
     }
     localStorage.setItem(STORAGE_KEY_ESCALAS, JSON.stringify(atuais));
+    syncComServidorCentral({ escalas: atuais });
+    this.sincronizarComSupabase().catch(() => {});
+    return atuais;
+  },
+
+  salvarMultiplasEscalas(novasEscalas: EscalaItem[]): EscalaItem[] {
+    const atuais = this.getEscalas();
+    novasEscalas.forEach(escala => {
+      const idx = atuais.findIndex(e => e.viatura.trim().toUpperCase() === escala.viatura.trim().toUpperCase());
+      if (idx !== -1) {
+        atuais[idx] = escala;
+      } else {
+        atuais.push(escala);
+      }
+    });
+    localStorage.setItem(STORAGE_KEY_ESCALAS, JSON.stringify(atuais));
+    syncComServidorCentral({ escalas: atuais });
+    this.sincronizarComSupabase().catch(() => {});
     return atuais;
   },
 
@@ -497,7 +518,7 @@ export const storageService = {
 
   getOperadores(): string[] {
     const map = this.getOperadoresSenhas();
-    return Object.keys(map).sort();
+    return Object.keys(map);
   },
 
   getOperadoresSenhas(): Record<string, string> {
@@ -1296,7 +1317,9 @@ export const storageService = {
   }> {
     const linhas = conteudo.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const senhasMap: Record<string, string> = modo === 'substituir' ? {} : this.getOperadoresSenhas();
-    const militaresAtuais = new Set(this.getMilitares());
+    // Preserva rigorosamente a ordem de antiguidade (ordem em que os militares aparecem no arquivo)
+    const listaMilitares: string[] = modo === 'substituir' ? [] : [...this.getMilitares()];
+    const militaresVistos = new Set<string>(listaMilitares.map(m => m.toLowerCase()));
     let count = 0;
 
     const parsedOperadores: Array<{ usuario: string; senha: string }> = [];
@@ -1320,15 +1343,18 @@ export const storageService = {
       if (opNome.toUpperCase() === 'OPERADOR' || opNome.toUpperCase() === 'USUARIO') return;
       if (opNome) {
         senhasMap[opNome] = senha || '123456';
-        militaresAtuais.add(opNome);
+        if (!militaresVistos.has(opNome.toLowerCase())) {
+          militaresVistos.add(opNome.toLowerCase());
+          listaMilitares.push(opNome);
+        }
         parsedOperadores.push({ usuario: opNome, senha: senha || '123456' });
         count++;
       }
     });
 
     this.setOperadoresSenhas(senhasMap);
-    this.setMilitares(Array.from(militaresAtuais));
-    await syncComServidorCentral({ operadoresSenhas: senhasMap, militares: Array.from(militaresAtuais) });
+    this.setMilitares(listaMilitares);
+    await syncComServidorCentral({ operadoresSenhas: senhasMap, militares: listaMilitares });
 
     let salvoNoSupabase = false;
     const sb = getSupabase();
@@ -1336,6 +1362,7 @@ export const storageService = {
       try {
         if (modo === 'substituir') {
           await sb.from('operadores').delete().neq('usuario', '');
+          await sb.from('militares').delete().neq('nome', '');
         }
 
         const operadoresPayload: Array<{ usuario: string; senha_hash: string; ativo: boolean; updated_at: string }> = [];
@@ -1354,7 +1381,7 @@ export const storageService = {
           await sb.from('operadores').upsert(lote, { onConflict: 'usuario' });
         }
 
-        const militaresPayload = Array.from(militaresAtuais).map(nome => ({ nome }));
+        const militaresPayload = listaMilitares.map(nome => ({ nome }));
         for (let i = 0; i < militaresPayload.length; i += 100) {
           const lote = militaresPayload.slice(i, i + 100);
           await sb.from('militares').upsert(lote, { onConflict: 'nome' });
@@ -1369,7 +1396,7 @@ export const storageService = {
     return {
       total: linhas.length,
       importados: count,
-      operadores: Object.keys(senhasMap).sort(),
+      operadores: Object.keys(senhasMap),
       salvoNoSupabase
     };
   },

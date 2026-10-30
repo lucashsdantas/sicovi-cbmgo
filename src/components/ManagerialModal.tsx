@@ -141,10 +141,28 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
   });
   const [copiadoSql, setCopiadoSql] = useState(false);
 
-  // Lista combinada de militares e operadores respeitando a antiguidade
+  // Lista combinada de militares e operadores respeitando estritamente a antiguidade cadastrada
   const listaMilitarParaSenha = useMemo(() => {
-    return Array.from(new Set([...operadores, ...militares])).filter(Boolean);
-  }, [operadores, militares]);
+    const list: string[] = [];
+    const seen = new Set<string>();
+    militares.forEach(m => {
+      const clean = (m || '').trim();
+      const k = clean.toLowerCase();
+      if (clean && !seen.has(k)) {
+        seen.add(k);
+        list.push(clean);
+      }
+    });
+    operadores.forEach(o => {
+      const clean = (o || '').trim();
+      const k = clean.toLowerCase();
+      if (clean && !seen.has(k)) {
+        seen.add(k);
+        list.push(clean);
+      }
+    });
+    return list;
+  }, [militares, operadores]);
 
   const militaresFiltradosParaSenha = useMemo(() => {
     if (!filtroMilitarSenha.trim()) return listaMilitarParaSenha;
@@ -153,12 +171,20 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
   }, [listaMilitarParaSenha, filtroMilitarSenha]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setAutenticado(false);
+      setSenhaInput('');
+      setErroAuth('');
+      return;
+    }
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (alertModal.isOpen) {
           setAlertModal(prev => ({ ...prev, isOpen: false }));
         } else {
+          setAutenticado(false);
+          setSenhaInput('');
+          setErroAuth('');
           onClose();
         }
       }
@@ -166,6 +192,13 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, alertModal.isOpen, onClose]);
+
+  const handleFecharModal = () => {
+    setAutenticado(false);
+    setSenhaInput('');
+    setErroAuth('');
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -698,8 +731,8 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
               </button>
             )}
             <button
-              onClick={onClose}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              onClick={handleFecharModal}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -801,7 +834,7 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                 <button
                   type="button"
                   onClick={onOpenQrCodes}
-                  className="flex items-center gap-2 px-3.5 py-2 text-xs font-black border-b-2 border-transparent text-amber-900 bg-amber-100/80 hover:bg-amber-200/90 rounded-t-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ml-auto"
+                  className="flex items-center gap-2 px-3.5 py-2 text-xs font-black border-b-2 border-transparent text-amber-900 bg-amber-100/80 hover:bg-amber-200/90 rounded-t-lg transition-all cursor-pointer whitespace-nowrap shrink-0"
                   title="Gerar e imprimir QR Codes das viaturas para fixação no painel"
                 >
                   <QrCode className="w-4 h-4 text-amber-700" />

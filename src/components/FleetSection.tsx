@@ -8,31 +8,40 @@ interface FleetSectionProps {
 }
 
 export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, onSelectVehicle }) => {
-  // 1. RESGATE: apenas viaturas de Resgate
-  const resgateViaturas = viaturas.filter(v => {
-    const c = (v.categoria || '').trim().toUpperCase();
-    return c === 'RESGATE' || (c === '' && v.prefixo.startsWith('UR'));
-  });
+  const sortAlfabetico = (a: ViaturaItem, b: ViaturaItem) =>
+    a.prefixo.localeCompare(b.prefixo, 'pt-BR', { numeric: true, sensitivity: 'base' });
 
-  // 2. INCÊNDIO & SALVAMENTO: Incêndio/Salvamento E Suporte Avançado juntos no mesmo quadro
-  const incendioESuporteViaturas = viaturas.filter(v => {
-    const c = (v.categoria || '').trim().toUpperCase();
-    return (
-      c === 'INCÊNDIO/SALVAMENTO' ||
-      c === 'INCENDIO/SALVAMENTO' ||
-      c === 'SUPORTE AVANÇADO' ||
-      c === 'SUPORTE AVANCADO' ||
-      c === 'INCÊNDIO' ||
-      c === 'INCENDIO' ||
-      c === 'SALVAMENTO' ||
-      (c === '' && (v.prefixo.startsWith('ABT') || v.prefixo.startsWith('ABS') || v.prefixo.startsWith('USA')))
-    );
-  });
+  // 1. RESGATE: apenas viaturas de Resgate em ordem alfabética
+  const resgateViaturas = viaturas
+    .filter(v => {
+      const c = (v.categoria || '').trim().toUpperCase();
+      return c === 'RESGATE' || (c === '' && v.prefixo.startsWith('UR'));
+    })
+    .sort(sortAlfabetico);
 
-  // 3. ADMINISTRATIVAS: as demais viaturas
-  const admViaturas = viaturas.filter(v => {
-    return !resgateViaturas.includes(v) && !incendioESuporteViaturas.includes(v);
-  });
+  // 2. INCÊNDIO & SALVAMENTO: Incêndio/Salvamento E Suporte Avançado juntos em ordem alfabética
+  const incendioESuporteViaturas = viaturas
+    .filter(v => {
+      const c = (v.categoria || '').trim().toUpperCase();
+      return (
+        c === 'INCÊNDIO/SALVAMENTO' ||
+        c === 'INCENDIO/SALVAMENTO' ||
+        c === 'SUPORTE AVANÇADO' ||
+        c === 'SUPORTE AVANCADO' ||
+        c === 'INCÊNDIO' ||
+        c === 'INCENDIO' ||
+        c === 'SALVAMENTO' ||
+        (c === '' && (v.prefixo.startsWith('ABT') || v.prefixo.startsWith('ABS') || v.prefixo.startsWith('USA')))
+      );
+    })
+    .sort(sortAlfabetico);
+
+  // 3. ADMINISTRATIVAS: as demais viaturas em ordem alfabética
+  const admViaturas = viaturas
+    .filter(v => {
+      return !resgateViaturas.some(r => r.prefixo === v.prefixo) && !incendioESuporteViaturas.some(i => i.prefixo === v.prefixo);
+    })
+    .sort(sortAlfabetico);
 
   const renderCard = (v: ViaturaItem, iconType: 'ambulance' | 'truck' | 'car') => {
     const s = (v.status || 'DISPONÍVEL').toUpperCase();

@@ -10,7 +10,10 @@ import {
   LogOut,
   Monitor,
   User,
-  X
+  X,
+  Ambulance,
+  Truck,
+  Car
 } from 'lucide-react';
 import { ViaturaItem, RegistroDespacho, CategoriaViatura } from '../../types/sicovi';
 import { storageService, formatarDataHoraPtBr, getAgoraIsoBrasilia } from '../../services/storageService';
@@ -27,6 +30,33 @@ interface MobileHubProps {
   onLogout: () => void;
   onSwitchToDesktop: () => void;
 }
+
+const getViaturaIcon = (categoria?: string, prefixo?: string) => {
+  const p = (prefixo || '').toUpperCase();
+  const c = (categoria || '').toUpperCase();
+  if (
+    c.includes('RESGATE') ||
+    p.startsWith('UR') ||
+    p.startsWith('USA') ||
+    p.startsWith('ASU') ||
+    p.startsWith('USB')
+  ) {
+    return Ambulance;
+  }
+  if (
+    c.includes('INCÊNDIO') ||
+    c.includes('SALVAMENTO') ||
+    p.startsWith('ABT') ||
+    p.startsWith('ABS') ||
+    p.startsWith('AT') ||
+    p.startsWith('ABTS') ||
+    p.startsWith('AR') ||
+    p.startsWith('ACA')
+  ) {
+    return Truck;
+  }
+  return Car;
+};
 
 export const MobileHub: React.FC<MobileHubProps> = ({
   condutor,
@@ -488,38 +518,48 @@ export const MobileHub: React.FC<MobileHubProps> = ({
                 {grupo.lista.map(vtr => {
                   const isDisponivel = (vtr.status || '').toUpperCase() === 'DISPONÍVEL';
                   const regAtivo = !isDisponivel ? getRegistroEmAberto(vtr.prefixo) : null;
+                  const IconeVtr = getViaturaIcon(vtr.categoria, vtr.prefixo);
 
                   if (isDisponivel) {
-                    // Card Viatura DISPONÍVEL (Exatamente como ATP-13, AV-756, AV-759 no print)
+                    // Card Viatura DISPONÍVEL com ícone e feedback de toque
                     return (
                       <button
                         key={vtr.prefixo}
                         type="button"
                         onClick={() => handleSelecionarViatura(vtr)}
-                        className="bg-white hover:bg-emerald-50/20 active:scale-97 border-2 border-emerald-500 rounded-3xl p-5 min-h-[140px] flex items-center justify-center shadow-xs hover:shadow-md transition-all cursor-pointer group text-center"
+                        className="bg-white hover:bg-emerald-50/20 active:bg-emerald-100/70 active:scale-95 touch-manipulation select-none border-2 border-emerald-500 rounded-3xl p-4 min-h-[140px] flex flex-col items-center justify-center shadow-xs hover:shadow-md transition-all duration-75 cursor-pointer group text-center"
                       >
+                        <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1.5 group-active:scale-90 group-hover:scale-105 transition-transform">
+                          <IconeVtr className="w-6 h-6" />
+                        </div>
                         <span className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight group-hover:text-indigo-600 transition-colors">
                           {vtr.prefixo}
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mt-1">
+                          Disponível
                         </span>
                       </button>
                     );
                   }
 
-                  // Card Viatura EMPENHADA / OCUPADA (Exatamente como AV-757 no print)
+                  // Card Viatura EMPENHADA / OCUPADA com ícone e feedback de toque
                   return (
                     <button
                       key={vtr.prefixo}
                       type="button"
                       onClick={() => handleSelecionarViatura(vtr)}
-                      className="bg-white hover:bg-amber-50/20 active:scale-97 border-2 border-dashed border-amber-500 rounded-3xl p-4 min-h-[140px] flex flex-col items-center justify-center text-center shadow-xs transition-all cursor-pointer"
+                      className="bg-white hover:bg-amber-50/20 active:bg-amber-100/70 active:scale-95 touch-manipulation select-none border-2 border-dashed border-amber-500 rounded-3xl p-3.5 min-h-[140px] flex flex-col items-center justify-center text-center shadow-xs transition-all duration-75 cursor-pointer group"
                     >
+                      <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 group-active:scale-90 transition-transform">
+                        <IconeVtr className="w-4 h-4" />
+                      </div>
                       {/* Prefixo em tom suave */}
-                      <span className="text-base sm:text-lg font-black text-slate-400 tracking-tight">
+                      <span className="text-base sm:text-lg font-black text-slate-700 tracking-tight">
                         {vtr.prefixo}
                       </span>
 
                       {/* Nome do Militar Condutor Responsável */}
-                      <span className="text-[11px] font-black uppercase text-slate-700 tracking-tight mt-1 line-clamp-1">
+                      <span className="text-[11px] font-black uppercase text-slate-800 tracking-tight mt-0.5 line-clamp-1">
                         {regAtivo?.condutor || 'Condutor'}
                       </span>
 
@@ -534,7 +574,7 @@ export const MobileHub: React.FC<MobileHubProps> = ({
                       </span>
 
                       {/* Data e Hora de Saída */}
-                      <span className="text-[10px] font-bold text-slate-400 mt-0.5">
+                      <span className="text-[10px] font-bold text-amber-700 mt-0.5">
                         {formatarDataHoraAbreviada(regAtivo?.saida)}
                       </span>
                     </button>

@@ -44,10 +44,8 @@ import { SystemAlertModal } from './components/SystemAlertModal';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function App() {
-  // Session State - Inicializa por padrão para permitir visualização contínua no ambiente AI Studio
-  const [operador, setOperador] = useState<string | null>(() => {
-    return sessionStorage.getItem('operadorLogado') || localStorage.getItem('ultimoOperador') || '2º Sgt Dantas';
-  });
+  // Session State - Sempre exige login explícito por usuário e senha ao abrir o sistema
+  const [operador, setOperador] = useState<string | null>(null);
 
   // Viatura alvo vinda de escaneamento de QR Code via URL (?vtr=UR-152&ambiente=mobile)
   const [viaturaAlvoMobile, setViaturaAlvoMobile] = useState<string | null>(() => {
@@ -55,6 +53,22 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get('vtr');
   });
+
+  // Limpa imediatamente o parâmetro ?vtr=... da barra de endereço e do histórico do navegador
+  // evitando que acessos posteriores fiquem reabrindo a viatura lida anteriormente
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search) {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('vtr')) {
+          url.searchParams.delete('vtr');
+          const novoSearch = url.searchParams.toString();
+          const novaUrl = url.pathname + (novoSearch ? '?' + novoSearch : '');
+          window.history.replaceState({}, document.title, novaUrl);
+        }
+      } catch {}
+    }
+  }, []);
 
   // Modo de ambiente: Desktop (Central de Operações) ou Mobile (Acesso Viatura)
   const [modoAmbiente, setModoAmbiente] = useState<'desktop' | 'mobile'>(() => {
@@ -404,6 +418,8 @@ export default function App() {
     setModoAmbiente(ambiente);
     sessionStorage.setItem('operadorLogado', selectedOp);
     sessionStorage.setItem('sicovi_modo_ambiente', ambiente);
+    // Limpa a viatura predefinida do QR Code para não persistir em sessões futuras
+    setViaturaAlvoMobile(null);
     atualizarDataFimParaAgora();
     showToast(
       'Acesso Concluído',
@@ -413,8 +429,18 @@ export default function App() {
 
   const handleLogout = () => {
     setOperador(null);
+    setViaturaAlvoMobile(null);
     sessionStorage.removeItem('operadorLogado');
     sessionStorage.removeItem('sicovi_modo_ambiente');
+    if (typeof window !== 'undefined' && window.location.search) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('vtr');
+        const novoSearch = url.searchParams.toString();
+        const novaUrl = url.pathname + (novoSearch ? '?' + novoSearch : '');
+        window.history.replaceState({}, document.title, novaUrl);
+      } catch {}
+    }
   };
 
   // KPI Calculations
@@ -687,7 +713,7 @@ export default function App() {
   };
 
   // Escala Save Handling
-  const handleSaveEscala = (escala: EscalaItem, andNext = false) => {
+  const handleSaveEscala = (escala: EscalaItem) => {
     const updated = storageService.salvarEscala(escala);
     setEscalas([...updated]);
     showToast('Escala Gravada!', `Escala da viatura ${escala.viatura} gravada com sucesso.`);
@@ -696,9 +722,20 @@ export default function App() {
       title: 'Escala Salva no Banco de Dados!',
       message: `A escala operacional da viatura ${escala.viatura} (Condutor: ${escala.condutor}) foi salva com sucesso no banco de dados!`
     });
-    if (!andNext) {
-      setIsEscalaModalOpen(false);
-    }
+    // Não fecha o modal após o usuário clicar em salvar
+  };
+
+  const handleSaveMultipleEscalas = (novasEscalas: EscalaItem[]) => {
+    const updated = storageService.salvarMultiplasEscalas(novasEscalas);
+    setEscalas([...updated]);
+    const nomes = novasEscalas.map(e => e.viatura).join(', ');
+    showToast('Escalas Gravadas!', `${novasEscalas.length} viatura(s) escalada(s) com sucesso.`);
+    setSuccessModal({
+      isOpen: true,
+      title: 'Escalas Salvas no Banco de Dados!',
+      message: `As escalas de ${novasEscalas.length} viatura(s) (${nomes}) foram gravadas com sucesso no banco de dados!`
+    });
+    // Não fecha o modal após o usuário clicar em salvar
   };
 
   // Military Register Handling
@@ -1065,6 +1102,7 @@ export default function App() {
         escalas={escalas}
         militares={militares}
         onSaveEscala={handleSaveEscala}
+        onSaveMultipleEscalas={handleSaveMultipleEscalas}
         onOpenRegisterMilitary={initName => {
           setMilitaryRegisterInitialName(initName || '');
           setIsMilitaryRegisterOpen(true);
