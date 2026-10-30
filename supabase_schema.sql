@@ -64,13 +64,14 @@ CREATE TABLE IF NOT EXISTS public.bairros (
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.escalas (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    viatura VARCHAR(50) NOT NULL,
+    viatura VARCHAR(50) UNIQUE NOT NULL,
     condutor VARCHAR(100) NOT NULL,
     equipe TEXT DEFAULT '',
     data_escala DATE DEFAULT CURRENT_DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_escalas_viatura_uniq ON public.escalas(viatura);
 
 -- ----------------------------------------------------------------------------
 -- 6. TABELA DE REGISTROS DE DESPACHO / DESLOCAMENTOS

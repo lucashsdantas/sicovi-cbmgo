@@ -10,6 +10,24 @@ const STORAGE_KEY_DESTINOS = 'sicovi_destinos';
 const STORAGE_KEY_OPERADORES = 'sicovi_operadores';
 const STORAGE_KEY_SCRIPT_URL = 'sicovi_gas_script_url';
 const STORAGE_KEY_PROXIMO_ID = 'sicovi_proximo_id';
+const STORAGE_KEY_NATUREZAS = 'sicovi_historico_naturezas';
+
+export const DEFAULT_NATUREZAS = [
+  'APH Clínico',
+  'Acidente de Trânsito (Colisão)',
+  'Acidente de Trânsito (Queda de Moto)',
+  'Atropelamento',
+  'Incêndio em Vegetação',
+  'Incêndio em Edificação Comercial',
+  'Incêndio em Edificação Residencial',
+  'Incêndio em Veículo',
+  'Salvamento / Resgate de Animal',
+  'Corte / Poda de Árvore',
+  'Captura de Abelhas / Marimbondos',
+  'Busca e Salvamento de Pessoa',
+  'Vistoria Técnica Operacional',
+  'Apoio a Outro Órgão'
+];
 
 // Hash SHA-256 da senha gerencial de emergência (sem texto puro em código)
 const ADMIN_PASS_HASH = '7d824ad37e366f330ef3d3bafb8dc8b18a5b07622e2830eac5966339d98a94b0';
@@ -470,7 +488,31 @@ export const storageService = {
     }
     localStorage.setItem(STORAGE_KEY_ESCALAS, JSON.stringify(atuais));
     syncComServidorCentral({ escalas: atuais });
-    this.sincronizarComSupabase().catch(() => {});
+
+    // Persistência imediata e robusta na nuvem (Supabase)
+    const sb = getSupabase();
+    if (sb) {
+      const payload = {
+        viatura: escala.viatura.trim().toUpperCase(),
+        condutor: escala.condutor.trim(),
+        equipe: escala.equipe ? escala.equipe.trim() : '',
+        updated_at: new Date().toISOString()
+      };
+      Promise.resolve(
+        sb.from('escalas')
+          .upsert(payload, { onConflict: 'viatura' })
+      )
+        .then(({ error }: any) => {
+          if (error) {
+            console.warn('Upsert de escala no Supabase requereu fallback delete+insert:', error.message);
+            Promise.resolve(sb.from('escalas').delete().eq('viatura', payload.viatura)).then(() => {
+              Promise.resolve(sb.from('escalas').insert(payload)).then();
+            });
+          }
+        })
+        .catch((err: any) => console.warn('Erro ao salvar escala no Supabase:', err));
+    }
+
     return atuais;
   },
 
@@ -486,8 +528,84 @@ export const storageService = {
     });
     localStorage.setItem(STORAGE_KEY_ESCALAS, JSON.stringify(atuais));
     syncComServidorCentral({ escalas: atuais });
-    this.sincronizarComSupabase().catch(() => {});
+
+    // Persistência em lote na nuvem (Supabase)
+    const sb = getSupabase();
+    if (sb && novasEscalas.length > 0) {
+      const payload = novasEscalas.map(e => ({
+        viatura: e.viatura.trim().toUpperCase(),
+        condutor: e.condutor.trim(),
+        equipe: e.equipe ? e.equipe.trim() : '',
+        updated_at: new Date().toISOString()
+      }));
+      Promise.resolve(
+        sb.from('escalas')
+          .upsert(payload, { onConflict: 'viatura' })
+      )
+        .then(({ error }: any) => {
+          if (error) {
+            console.warn('Upsert múltiplo de escalas requereu fallback delete+insert:', error.message);
+            const vtrs = payload.map(p => p.viatura);
+            Promise.resolve(sb.from('escalas').delete().in('viatura', vtrs)).then(() => {
+              Promise.resolve(sb.from('escalas').insert(payload)).then();
+            });
+          }
+        })
+        .catch((err: any) => console.warn('Erro ao salvar escalas no Supabase:', err));
+    }
+
     return atuais;
+  },
+
+  getNaturezasHistorico(): string[] {
+    const mapa = new Map<string, string>();
+
+    // 1. Naturezas padrão de bombeiro
+    DEFAULT_NATUREZAS.forEach(n => {
+      const trim = n.trim();
+      if (trim) mapa.set(trim.toLowerCase(), trim);
+    });
+
+    // 2. Histórico salvo pelo usuário
+    const raw = localStorage.getItem(STORAGE_KEY_NATUREZAS);
+    if (raw) {
+      try {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          arr.forEach((item: any) => {
+            if (typeof item === 'string' && item.trim().length > 1) {
+              const trim = item.trim();
+              mapa.set(trim.toLowerCase(), trim);
+            }
+          });
+        }
+      } catch {}
+    }
+
+    // 3. Naturezas já registradas no banco de registros de despacho
+    const regs = this.getRegistros();
+    regs.forEach(r => {
+      if (r.natureza && typeof r.natureza === 'string' && r.natureza.trim().length > 1) {
+        const trim = r.natureza.trim();
+        mapa.set(trim.toLowerCase(), trim);
+      }
+    });
+
+    return Array.from(mapa.values());
+  },
+
+  salvarNaturezaNoHistorico(natureza: string): void {
+    if (!natureza || typeof natureza !== 'string') return;
+    const limpa = natureza.trim();
+    if (limpa.length < 2) return;
+
+    try {
+      const historicoAtual = this.getNaturezasHistorico();
+      if (!historicoAtual.some(n => n.toLowerCase() === limpa.toLowerCase())) {
+        const novoHistorico = [limpa, ...historicoAtual];
+        localStorage.setItem(STORAGE_KEY_NATUREZAS, JSON.stringify(novoHistorico));
+      }
+    } catch {}
   },
 
   getBairros(): string[] {
@@ -799,6 +917,11 @@ export const storageService = {
     atuais.sort((a, b) => Number(b.id) - Number(a.id));
     localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(atuais));
 
+    // Salva natureza no histórico para preenchimento rápido futuro
+    if (novoItem.natureza) {
+      this.salvarNaturezaNoHistorico(novoItem.natureza);
+    }
+
     // Atualiza status da viatura
     const novoStatus = (!r.chegada || String(r.chegada).trim() === '') ? 'EMPENHADA' : 'DISPONÍVEL';
     const viaturas = this.getViaturas();
@@ -905,6 +1028,11 @@ export const storageService = {
     atuais.sort((a, b) => Number(b.id) - Number(a.id));
     localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(atuais));
     this.setViaturas(viaturas);
+
+    // Salva natureza no histórico para preenchimento rápido futuro
+    if (itemPrincipal.natureza) {
+      this.salvarNaturezaNoHistorico(itemPrincipal.natureza);
+    }
 
     // Persistência no Banco Central Express
     syncComServidorCentral({
@@ -1615,6 +1743,23 @@ export const storageService = {
         }
       }
 
+      // 6. Escalas de Serviço
+      const escalas = this.getEscalas();
+      if (escalas.length > 0) {
+        const escPayload = escalas.map(e => ({
+          viatura: e.viatura.trim().toUpperCase(),
+          condutor: e.condutor.trim(),
+          equipe: e.equipe ? e.equipe.trim() : '',
+          updated_at: new Date().toISOString()
+        }));
+        const { error: errEsc } = await sb.from('escalas').upsert(escPayload, { onConflict: 'viatura' });
+        if (errEsc) {
+          const vtrs = escPayload.map(p => p.viatura);
+          await sb.from('escalas').delete().in('viatura', vtrs);
+          await sb.from('escalas').insert(escPayload);
+        }
+      }
+
       return {
         success: true,
         viaturas: vtrs.length,
@@ -1622,7 +1767,7 @@ export const storageService = {
         operadores: opNames.length,
         bairros: bairros.length,
         registros: regs.length,
-        mensagem: `Upload concluído com sucesso! ${vtrs.length} viaturas, ${mils.length} militares, ${opNames.length} operadores, ${bairros.length} bairros e ${regs.length} registros foram sincronizados com o Supabase na nuvem.`
+        mensagem: `Upload concluído com sucesso! ${vtrs.length} viaturas, ${mils.length} militares, ${opNames.length} operadores, ${bairros.length} bairros, ${escalas.length} escalas e ${regs.length} registros foram sincronizados com o Supabase na nuvem.`
       };
     } catch (err: any) {
       console.error('Erro ao enviar dados para Supabase:', err);
@@ -1740,7 +1885,23 @@ export const storageService = {
         console.warn('Erro ao sincronizar bairros do Supabase:', e);
       }
 
-      // 5. Registros de Deslocamento
+      // 5. Escalas de Serviço
+      try {
+        const { data: escData, error: errEsc } = await sb.from('escalas').select('viatura, condutor, equipe');
+        if (!errEsc && escData && escData.length > 0) {
+          const listaEscalas: EscalaItem[] = escData.map((e: any) => ({
+            viatura: e.viatura,
+            condutor: e.condutor,
+            equipe: e.equipe || ''
+          }));
+          localStorage.setItem(STORAGE_KEY_ESCALAS, JSON.stringify(listaEscalas));
+          await syncComServidorCentral({ escalas: listaEscalas });
+        }
+      } catch (e) {
+        console.warn('Erro ao sincronizar escalas do Supabase:', e);
+      }
+
+      // 6. Registros de Deslocamento
       let queryRegs = sb.from('registros').select('*');
       if (limiteDias && limiteDias > 0) {
         const dtLimite = new Date();
@@ -1874,6 +2035,14 @@ export const storageService = {
         // Bairros
         if (Array.isArray(d.bairros) && d.bairros.length > 0) {
           localStorage.setItem(STORAGE_KEY_BAIRROS, JSON.stringify(d.bairros));
+        }
+
+        // Escalas
+        if (Array.isArray(d.escalas) && d.escalas.length > 0) {
+          localStorage.setItem(STORAGE_KEY_ESCALAS, JSON.stringify(d.escalas));
+        } else {
+          const locE = this.getEscalas();
+          if (locE.length > 0) syncComServidorCentral({ escalas: locE });
         }
 
         // Destinos

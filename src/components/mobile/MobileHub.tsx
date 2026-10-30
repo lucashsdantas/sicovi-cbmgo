@@ -138,6 +138,8 @@ export const MobileHub: React.FC<MobileHubProps> = ({
     );
   };
 
+  const naturezasHistorico = useMemo(() => storageService.getNaturezasHistorico(), [modalSaidaOpen]);
+
   // Filtro e agrupamento de viaturas em ordem alfabética estrita
   const viaturasAgrupadas = useMemo(() => {
     const termo = buscaVtr.toLowerCase().trim();
@@ -702,18 +704,49 @@ export const MobileHub: React.FC<MobileHubProps> = ({
                 </div>
               </div>
 
-              {/* 4. Natureza da Ocorrência (Print 2) */}
+              {/* 4. Natureza da Ocorrência (com histórico e preenchimento rápido) */}
               <div className="space-y-1.5">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                  Natureza da Ocorrência
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                    Natureza da Ocorrência
+                  </span>
+                  <span className="text-[9px] font-bold text-indigo-600">Preenchimento rápido</span>
+                </div>
                 <input
                   type="text"
+                  list="datalist-naturezas-mobile"
                   value={naturezaInput}
                   onChange={e => setNaturezaInput(e.target.value)}
-                  placeholder="..."
+                  placeholder="Selecione ou digite..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                 />
+                <datalist id="datalist-naturezas-mobile">
+                  {naturezasHistorico.map(n => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
+
+                {naturezasHistorico.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1 max-h-20 overflow-y-auto">
+                    {naturezasHistorico.slice(0, 6).map(nat => {
+                      const sel = naturezaInput.trim().toLowerCase() === nat.trim().toLowerCase();
+                      return (
+                        <button
+                          key={nat}
+                          type="button"
+                          onClick={() => setNaturezaInput(nat)}
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-xl transition-all border ${
+                            sel
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:scale-95'
+                          }`}
+                        >
+                          {nat}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* 5. Bairro / Cidade (Print 2) */}
