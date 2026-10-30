@@ -1,13 +1,15 @@
 import React from 'react';
-import { ViaturaItem } from '../types/sicovi';
+import { ViaturaItem, RegistroDespacho } from '../types/sicovi';
 import { Ambulance, Truck, Car, LayoutGrid } from 'lucide-react';
+import { isDestinoOcorrencia } from '../services/storageService';
 
 interface FleetSectionProps {
   viaturas: ViaturaItem[];
+  registros?: RegistroDespacho[];
   onSelectVehicle: (prefixo: string, status: string) => void;
 }
 
-export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, onSelectVehicle }) => {
+export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, registros, onSelectVehicle }) => {
   const sortAlfabetico = (a: ViaturaItem, b: ViaturaItem) =>
     a.prefixo.localeCompare(b.prefixo, 'pt-BR', { numeric: true, sensitivity: 'base' });
 
@@ -45,29 +47,57 @@ export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, onSelectVe
 
   const renderCard = (v: ViaturaItem, iconType: 'ambulance' | 'truck' | 'car') => {
     const s = (v.status || 'DISPONÍVEL').toUpperCase();
+    const isDisponivel = s === 'DISPONÍVEL';
+
+    // Busca o registro em aberto da viatura para saber o destino
+    const regAberto = !isDisponivel
+      ? (registros || []).find(
+          r =>
+            r.viatura.trim().toUpperCase() === v.prefixo.trim().toUpperCase() &&
+            (!r.chegada || r.chegada.trim() === '' || r.chegada === 'EM ABERTO')
+        )
+      : null;
+
+    const isOcorrencia =
+      isDestinoOcorrencia(regAberto?.destino) ||
+      s === 'OCORRÊNCIA' ||
+      (regAberto?.destino || '').trim().toUpperCase() === 'OCORRÊNCIA' ||
+      (regAberto?.destino || '').trim().toUpperCase() === 'OCORRENCIA';
+
     let borderClass = 'border-t-2 border-t-emerald-500 bg-emerald-50/25';
     let labelColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
     let iconColor = 'text-emerald-600';
     let statusText = 'Disp';
 
-    if (s === 'EMPENHADA' || s === 'OCORRÊNCIA' || s === 'VISTORIA') {
-      borderClass = 'border-t-2 border-t-rose-500 bg-rose-50/25';
-      labelColor = 'text-rose-700 bg-rose-50 border-rose-200';
-      iconColor = 'text-rose-600';
-      statusText = 'Emp';
-    } else if (s === 'MANUTENÇÃO') {
-      borderClass = 'border-t-2 border-t-amber-500 bg-amber-50/25';
-      labelColor = 'text-amber-700 bg-amber-50 border-amber-200';
-      iconColor = 'text-amber-600';
-      statusText = 'Manut';
+    if (!isDisponivel) {
+      if (isOcorrencia) {
+        // Fora da OBM em OCORRÊNCIA: Vermelha
+        borderClass = 'border-t-2 border-t-rose-600 bg-rose-50/30';
+        labelColor = 'text-rose-700 bg-rose-50 border-rose-300';
+        iconColor = 'text-rose-600';
+        statusText = 'Ocorrência';
+      } else {
+        // Fora da OBM em OUTROS DESLOCAMENTOS (Vistorias, Serviço da OBM, Diversos, etc.): Amarela
+        borderClass = 'border-t-2 border-t-amber-500 bg-amber-50/35';
+        labelColor = 'text-amber-900 bg-amber-100/90 border-amber-300 font-extrabold';
+        iconColor = 'text-amber-600';
+        const d = (regAberto?.destino || s).trim();
+        statusText = d === 'MANUTENÇÃO' ? 'Manut' : d.length > 9 ? d.slice(0, 8) + '.' : d || 'Fora';
+      }
     }
+
+    const descricaoStatus = isDisponivel
+      ? 'Disponível na OBM'
+      : isOcorrencia
+      ? 'Em Ocorrência'
+      : (regAberto?.destino || 'Fora da OBM');
 
     return (
       <button
         key={v.prefixo}
         type="button"
         onClick={() => onSelectVehicle(v.prefixo, v.status)}
-        title={`${v.prefixo} - ${s} (Clique para registrar saída ou chegada)`}
+        title={`${v.prefixo} - ${descricaoStatus} (Clique para registrar saída ou chegada)`}
         className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg border border-slate-200/90 shadow-2xs hover:shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer ${borderClass}`}
       >
         <div className={`mb-0.5 ${iconColor}`}>

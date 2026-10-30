@@ -16,7 +16,7 @@ import {
   Car
 } from 'lucide-react';
 import { ViaturaItem, RegistroDespacho, CategoriaViatura } from '../../types/sicovi';
-import { storageService, formatarDataHoraPtBr, getAgoraIsoBrasilia } from '../../services/storageService';
+import { storageService, formatarDataHoraPtBr, getAgoraIsoBrasilia, isDestinoOcorrencia } from '../../services/storageService';
 import { soundEffects } from '../../utils/soundEffects';
 
 interface MobileHubProps {
@@ -242,7 +242,7 @@ export const MobileHub: React.FC<MobileHubProps> = ({
   };
 
   // Confirmar Saída
-  const handleConfirmarSaida = (e: React.FormEvent) => {
+  const handleConfirmarSaida = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vtrSelecionadaParaSaida) return;
 
@@ -253,6 +253,13 @@ export const MobileHub: React.FC<MobileHubProps> = ({
     }
 
     setErroModal(null);
+
+    // Garante que o ID atribuído seja o maior da nuvem + 1
+    try {
+      await storageService.obterMaiorIdNuvemAsync();
+    } catch (err) {
+      console.warn('Erro ao consultar maior ID na nuvem:', err);
+    }
 
     const payload: Partial<RegistroDespacho> = {
       id: 'PENDENTE',
@@ -542,15 +549,22 @@ export const MobileHub: React.FC<MobileHubProps> = ({
                     );
                   }
 
-                  // Card Viatura EMPENHADA / OCUPADA com ícone e feedback de toque
+                  // Card Viatura EMPENHADA / OCUPADA: Vermelho se Ocorrência, Amarelo se Outro destino
+                  const isOcorr = isDestinoOcorrencia(regAtivo?.destino);
+                  const bordaCor = isOcorr ? 'border-rose-500' : 'border-amber-500';
+                  const hoverBg = isOcorr ? 'hover:bg-rose-50/20 active:bg-rose-100/70' : 'hover:bg-amber-50/20 active:bg-amber-100/70';
+                  const badgeBg = isOcorr ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600';
+                  const textoDestino = isOcorr ? 'text-rose-600' : 'text-amber-800';
+                  const dataCor = isOcorr ? 'text-rose-700' : 'text-amber-700';
+
                   return (
                     <button
                       key={vtr.prefixo}
                       type="button"
                       onClick={() => handleSelecionarViatura(vtr)}
-                      className="bg-white hover:bg-amber-50/20 active:bg-amber-100/70 active:scale-95 touch-manipulation select-none border-2 border-dashed border-amber-500 rounded-3xl p-3.5 min-h-[140px] flex flex-col items-center justify-center text-center shadow-xs transition-all duration-75 cursor-pointer group"
+                      className={`bg-white ${hoverBg} active:scale-95 touch-manipulation select-none border-2 border-dashed ${bordaCor} rounded-3xl p-3.5 min-h-[140px] flex flex-col items-center justify-center text-center shadow-xs transition-all duration-75 cursor-pointer group`}
                     >
-                      <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 group-active:scale-90 transition-transform">
+                      <div className={`w-8 h-8 rounded-xl ${badgeBg} flex items-center justify-center mb-1 group-active:scale-90 transition-transform`}>
                         <IconeVtr className="w-4 h-4" />
                       </div>
                       {/* Prefixo em tom suave */}
@@ -564,7 +578,7 @@ export const MobileHub: React.FC<MobileHubProps> = ({
                       </span>
 
                       {/* Destino em destaque colorido */}
-                      <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wide mt-0.5">
+                      <span className={`text-[10px] font-black uppercase ${textoDestino} tracking-wide mt-0.5`}>
                         {regAtivo?.destino || 'Ocorrência'}
                       </span>
 
@@ -574,7 +588,7 @@ export const MobileHub: React.FC<MobileHubProps> = ({
                       </span>
 
                       {/* Data e Hora de Saída */}
-                      <span className="text-[10px] font-bold text-amber-700 mt-0.5">
+                      <span className={`text-[10px] font-bold ${dataCor} mt-0.5`}>
                         {formatarDataHoraAbreviada(regAtivo?.saida)}
                       </span>
                     </button>

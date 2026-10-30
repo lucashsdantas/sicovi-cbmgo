@@ -647,6 +647,16 @@ export const storageService = {
       const num = Number(item.id);
       if (!isNaN(num) && num > maxId) maxId = num;
     });
+
+    // Considera também o maior ID registrado/sincronizado da nuvem
+    const idNuvemRaw = localStorage.getItem('sicovi_maior_id_nuvem');
+    if (idNuvemRaw) {
+      const numNuvem = Number(idNuvemRaw);
+      if (!isNaN(numNuvem) && numNuvem > maxId) {
+        maxId = numNuvem;
+      }
+    }
+
     return maxId;
   },
 
@@ -655,7 +665,8 @@ export const storageService = {
     const stored = localStorage.getItem(STORAGE_KEY_PROXIMO_ID);
     if (stored !== null && stored !== '') {
       const parsed = parseInt(stored, 10);
-      if (!isNaN(parsed) && parsed > 0) {
+      // Sempre garante que o próximo ID seja estritamente maior que qualquer ID da nuvem ou local
+      if (!isNaN(parsed) && parsed > maxId) {
         return parsed;
       }
     }
@@ -675,6 +686,58 @@ export const storageService = {
     }
     this.setProximoId(inicio + qtd);
     return ids;
+  },
+
+  async obterMaiorIdNuvemAsync(): Promise<number> {
+    let maiorId = 0;
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        const { data, error } = await sb
+          .from('registros')
+          .select('id')
+          .order('id', { ascending: false })
+          .limit(1);
+        if (!error && data && data.length > 0) {
+          const val = Number(data[0].id);
+          if (!isNaN(val) && val > maiorId) {
+            maiorId = val;
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao consultar maior id no Supabase:', err);
+      }
+    }
+
+    // Consulta também o banco central se disponível
+    try {
+      if (typeof window !== 'undefined') {
+        const res = await fetch('/api/db');
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.data?.registros && Array.isArray(json.data.registros)) {
+            json.data.registros.forEach((r: any) => {
+              const num = Number(r.id);
+              if (!isNaN(num) && num > maiorId) maiorId = num;
+            });
+          }
+          if (json?.data?.proximoId) {
+            const p = Number(json.data.proximoId);
+            if (!isNaN(p) && p - 1 > maiorId) maiorId = p - 1;
+          }
+        }
+      }
+    } catch {}
+
+    const maxLocal = this.getMaiorIdRegistros();
+    const maxGlobal = Math.max(maiorId, maxLocal);
+
+    if (maxGlobal > 0) {
+      localStorage.setItem('sicovi_maior_id_nuvem', String(maxGlobal));
+      this.setProximoId(maxGlobal + 1);
+    }
+
+    return maxGlobal + 1;
   },
 
   async obterMaiorIdSupabase(): Promise<number | null> {
@@ -1730,6 +1793,16 @@ export const storageService = {
         localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(mesclados));
         // Sincroniza também com o servidor central Express
         await syncComServidorCentral({ registros: mesclados });
+
+        // Garante que o próximo ID na sequência seja sempre o maior ID da nuvem acrescido de 1
+        const maxMesclado = mesclados.reduce((acc, curr) => {
+          const num = Number(curr.id);
+          return !isNaN(num) && num > acc ? num : acc;
+        }, 0);
+        if (maxMesclado > 0) {
+          localStorage.setItem('sicovi_maior_id_nuvem', String(maxMesclado));
+          this.setProximoId(maxMesclado + 1);
+        }
       }
 
       return {

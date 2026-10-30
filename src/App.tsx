@@ -612,9 +612,23 @@ export default function App() {
   };
 
   // Dispatch Save Handling with Odometry Checks
-  const executeDispatchSave = (principal: Partial<RegistroDespacho>, apoios: ViaturaApoioItem[]) => {
+  const executeDispatchSave = async (principal: Partial<RegistroDespacho>, apoios: ViaturaApoioItem[]) => {
     // Atualiza sempre a data/hora final para o instante corrente na gravação
     atualizarDataFimParaAgora();
+
+    // Se for novo registro (sem ID numérico existente), garante sincronia com o maior ID da nuvem + 1
+    const isNovo =
+      !principal.id ||
+      principal.id === 'PENDENTE' ||
+      Number(principal.id) <= 0 ||
+      isNaN(Number(principal.id));
+    if (isNovo) {
+      try {
+        await storageService.obterMaiorIdNuvemAsync();
+      } catch (err) {
+        console.warn('Erro ao sincronizar com maior ID da nuvem:', err);
+      }
+    }
 
     const temChegada = Boolean(principal.chegada && String(principal.chegada).trim() !== '');
     if (temChegada) {
@@ -879,6 +893,7 @@ export default function App() {
             {/* Fleet Section */}
             <FleetSection
               viaturas={viaturas}
+              registros={registros}
               onSelectVehicle={handleSelectVehicleFromFleet}
             />
 

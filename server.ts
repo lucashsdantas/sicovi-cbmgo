@@ -63,7 +63,15 @@ function readDb(): ServerDatabase {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
-      return { ...initialDb, ...parsed };
+      let maxId = 0;
+      if (Array.isArray(parsed.registros)) {
+        parsed.registros.forEach((r: any) => {
+          const num = Number(r.id);
+          if (!isNaN(num) && num > maxId) maxId = num;
+        });
+      }
+      const prox = Math.max(Number(parsed.proximoId) || 1, maxId + 1);
+      return { ...initialDb, ...parsed, proximoId: prox };
     }
   } catch (err) {
     console.error('Erro ao ler database.json:', err);
@@ -74,9 +82,19 @@ function readDb(): ServerDatabase {
 
 function writeDb(data: Partial<ServerDatabase>): ServerDatabase {
   const current = readDb();
+  let maxId = 0;
+  const regs = Array.isArray(data.registros) ? data.registros : current.registros;
+  if (Array.isArray(regs)) {
+    regs.forEach((r: any) => {
+      const num = Number(r.id);
+      if (!isNaN(num) && num > maxId) maxId = num;
+    });
+  }
+  const prox = Math.max(Number(data.proximoId) || Number(current.proximoId) || 1, maxId + 1);
   const updated: ServerDatabase = {
     ...current,
     ...data,
+    proximoId: prox,
     updatedAt: new Date().toISOString()
   };
   fs.writeFileSync(DB_FILE, JSON.stringify(updated, null, 2), 'utf-8');

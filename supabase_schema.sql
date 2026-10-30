@@ -97,6 +97,9 @@ CREATE INDEX IF NOT EXISTS idx_registros_viatura ON public.registros(viatura);
 CREATE INDEX IF NOT EXISTS idx_registros_saida ON public.registros(saida DESC);
 CREATE INDEX IF NOT EXISTS idx_registros_operador ON public.registros(operador);
 
+-- Sincronização da sequência para que o próximo ID automático seja sempre o maior ID + 1
+SELECT setval(pg_get_serial_sequence('public.registros', 'id'), COALESCE((SELECT MAX(id) FROM public.registros), 1));
+
 -- ----------------------------------------------------------------------------
 -- POLÍTICAS DE ACESSO (Row Level Security - RLS)
 -- Permitir leitura e escrita autenticada ou via anon key para o frontend
