@@ -16,7 +16,7 @@ import {
   Car
 } from 'lucide-react';
 import { ViaturaItem, RegistroDespacho, CategoriaViatura } from '../../types/sicovi';
-import { storageService, formatarDataHoraPtBr, getAgoraIsoBrasilia, isDestinoOcorrencia } from '../../services/storageService';
+import { storageService, formatarDataHoraPtBr, getAgoraBrasilia, getAgoraIsoBrasilia, isDestinoOcorrencia } from '../../services/storageService';
 import { soundEffects } from '../../utils/soundEffects';
 
 interface MobileHubProps {
@@ -256,15 +256,19 @@ export const MobileHub: React.FC<MobileHubProps> = ({
 
     setErroModal(null);
 
-    // Garante que o ID atribuído seja o maior da nuvem + 1
+    // Garante que o ID atribuído obedeça à sequência global (maior da nuvem/servidor + 1)
+    let proximoIdAutoritativo: number;
     try {
-      await storageService.obterMaiorIdNuvemAsync();
-    } catch (err) {
-      console.warn('Erro ao consultar maior ID na nuvem:', err);
+      proximoIdAutoritativo = await storageService.obterMaiorIdNuvemAsync();
+    } catch {
+      proximoIdAutoritativo = storageService.getProximoId();
     }
 
+    // Fuso horário oficial de Brasília (UTC-3), idêntico ao desktop
+    const dataHoraSaidaFmt = formatarDataHoraPtBr(getAgoraBrasilia(), true);
+
     const payload: Partial<RegistroDespacho> = {
-      id: 'PENDENTE',
+      id: proximoIdAutoritativo,
       viatura: vtrSelecionadaParaSaida.prefixo.toUpperCase().trim(),
       condutor: condutor.trim(),
       operador: condutor.trim(), // Regra: condutor e operador têm mesmo valor no mobile
@@ -273,7 +277,7 @@ export const MobileHub: React.FC<MobileHubProps> = ({
       natureza: naturezaInput.trim() || destinoSelecionado,
       bairro: bairroInput.trim(),
       rai: '',
-      saida: getAgoraIsoBrasilia(),
+      saida: dataHoraSaidaFmt,
       kmSaida: kmNum,
       chegada: '',
       kmChegada: ''
@@ -288,7 +292,7 @@ export const MobileHub: React.FC<MobileHubProps> = ({
       isOpen: true,
       tipo: 'saida',
       titulo: 'Deslocamento Registrado!',
-      mensagem: `Viatura ${vtrSelecionadaParaSaida.prefixo} despachada com destino a ${destinoSelecionado}.`,
+      mensagem: `Viatura ${vtrSelecionadaParaSaida.prefixo} despachada (#${res.id}) com destino a ${destinoSelecionado}.`,
       viaturaPrefixo: vtrSelecionadaParaSaida.prefixo,
       idRegistro: res.id
     });
@@ -314,9 +318,12 @@ export const MobileHub: React.FC<MobileHubProps> = ({
 
     setErroModal(null);
 
+    // Fuso horário oficial de Brasília (UTC-3), idêntico ao desktop
+    const dataHoraChegadaFmt = formatarDataHoraPtBr(getAgoraBrasilia(), true);
+
     const payloadAtualizado: Partial<RegistroDespacho> = {
       ...registroAtivoChegada,
-      chegada: getAgoraIsoBrasilia(),
+      chegada: dataHoraChegadaFmt,
       kmChegada: kc,
       operador: condutor.trim()
     };
@@ -356,10 +363,12 @@ export const MobileHub: React.FC<MobileHubProps> = ({
 
     setErroModal(null);
 
+    const dataHoraChegadaFmt = formatarDataHoraPtBr(getAgoraBrasilia(), true);
+
     // Finaliza o deslocamento anterior preservando o condutor original que deu a saída
     const regFinalizado: Partial<RegistroDespacho> = {
       ...conflitoRegistro,
-      chegada: getAgoraIsoBrasilia(),
+      chegada: dataHoraChegadaFmt,
       kmChegada: kc,
       operador: conflitoRegistro.condutor
     };

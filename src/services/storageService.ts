@@ -289,8 +289,8 @@ export function parseDateTimeFormat(val: string | Date | null | undefined): Date
     return !isNaN(d.getTime()) ? d : null;
   }
 
-  // Normaliza vírgula separadora de data e hora
-  s = s.replace(',', ' ').trim();
+  // Normaliza vírgula e conectivos comuns separadores de data e hora (ex: '31/10/2026 às 11:20')
+  s = s.replace(/\s*às\s*/gi, ' ').replace(',', ' ').trim();
 
   // 1. Padrão brasileiro: DD/MM/YYYY ou DD/MM/YY com hora opcional HH:mm ou HH:mm:ss
   const matchBr = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})(?:[\sT]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
@@ -353,10 +353,12 @@ export function formatarDataHoraPtBr(dateOrStr: Date | string | null | undefined
       second: temSegundos ? '2-digit' : undefined,
       hour12: false
     });
-    return formatter.format(dt).replace(',', '');
+    // Remove conectivos e pontuações atípicas que navegadores mobile Android/iOS por vezes inserem
+    return formatter.format(dt).replace(/\s*às\s*/gi, ' ').replace(',', '').trim();
   } catch {
     const pad = (n: number) => (n < 10 ? '0' + n : String(n));
-    return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    const secStr = incluirSegundos || dt.getSeconds() > 0 ? `:${pad(dt.getSeconds())}` : '';
+    return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}${secStr}`;
   }
 }
 
@@ -840,18 +842,31 @@ export const storageService = {
     // Consulta também o banco central se disponível
     try {
       if (typeof window !== 'undefined') {
-        const res = await fetch('/api/db');
-        if (res.ok) {
-          const json = await res.json();
-          if (json?.data?.registros && Array.isArray(json.data.registros)) {
-            json.data.registros.forEach((r: any) => {
-              const num = Number(r.id);
-              if (!isNaN(num) && num > maiorId) maiorId = num;
-            });
+        const resProx = await fetch('/api/db/proximo-id');
+        if (resProx.ok) {
+          const jsonProx = await resProx.json();
+          if (jsonProx?.maiorId) {
+            const m = Number(jsonProx.maiorId);
+            if (!isNaN(m) && m > maiorId) maiorId = m;
           }
-          if (json?.data?.proximoId) {
-            const p = Number(json.data.proximoId);
+          if (jsonProx?.proximoId) {
+            const p = Number(jsonProx.proximoId);
             if (!isNaN(p) && p - 1 > maiorId) maiorId = p - 1;
+          }
+        } else {
+          const res = await fetch('/api/db');
+          if (res.ok) {
+            const json = await res.json();
+            if (json?.data?.registros && Array.isArray(json.data.registros)) {
+              json.data.registros.forEach((r: any) => {
+                const num = Number(r.id);
+                if (!isNaN(num) && num > maiorId) maiorId = num;
+              });
+            }
+            if (json?.data?.proximoId) {
+              const p = Number(json.data.proximoId);
+              if (!isNaN(p) && p - 1 > maiorId) maiorId = p - 1;
+            }
           }
         }
       }
@@ -1599,6 +1614,222 @@ export const storageService = {
       importados: count,
       operadores: Object.keys(senhasMap),
       salvoNoSupabase
+    };
+  },
+
+  async salvarMilitaresComAntiguidadeAsync(listaOrdenada: string[]): Promise<{
+    success: boolean;
+    total: number;
+    mensagem: string;
+  }> {
+    const limpos = limparListaMilitaresValidos(listaOrdenada);
+    this.setMilitares(limpos);
+    await syncComServidorCentral({ militares: limpos });
+
+    let salvoNoSupabase = false;
+    const sb = getSupabase();
+    if (sb && limpos.length > 0) {
+      try {
+        const payload = limpos.map((nome, idx) => ({
+          nome,
+          antiguidade: idx + 1,
+          ativo: true
+        }));
+        for (let i = 0; i < payload.length; i += 50) {
+          await sb.from('militares').upsert(payload.slice(i, i + 50), { onConflict: 'nome' });
+        }
+        salvoNoSupabase = true;
+      } catch (err: any) {
+        console.warn('Erro ao atualizar antiguidade no Supabase:', err);
+      }
+    }
+
+    return {
+      success: true,
+      total: limpos.length,
+      mensagem: `Ordem de antiguidade de ${limpos.length} militares salva com sucesso${salvoNoSupabase ? ' e sincronizada no Supabase Cloud' : ''}!`
+    };
+  },
+
+  async importarMilitaresComAntiguidadeESenha(conteudo: string, modo: 'substituir' | 'adicionar' = 'adicionar'): Promise<{
+    total: number;
+    importados: number;
+    militares: string[];
+    operadores: string[];
+    salvoNoSupabase: boolean;
+    erroSupabase?: string;
+  }> {
+    const linhas = conteudo.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const senhasMap: Record<string, string> = modo === 'substituir' ? {} : this.getOperadoresSenhas();
+    const militaresAtuais: string[] = modo === 'substituir' ? [] : [...this.getMilitares()];
+
+    interface MilitarParsed {
+      antiguidade: number;
+      nome: string;
+      senha: string;
+      ordemArquivo: number;
+    }
+
+    const novosParsed: MilitarParsed[] = [];
+    let count = 0;
+
+    for (let i = 0; i < linhas.length; i++) {
+      const linha = linhas[i];
+      let partes: string[] = [];
+      if (linha.includes(';')) {
+        partes = linha.split(';').map(p => p.trim());
+      } else if (linha.includes('\t')) {
+        partes = linha.split('\t').map(p => p.trim());
+      } else if (linha.includes(',')) {
+        partes = linha.split(',').map(p => p.trim());
+      } else {
+        partes = [linha.trim()];
+      }
+
+      // Detecção e descarte de linhas de cabeçalho
+      const textoCompleto = linha.toUpperCase();
+      if (
+        (textoCompleto.includes('ANTIGUIDADE') || textoCompleto.includes('ORDEM')) &&
+        (textoCompleto.includes('POSTO') || textoCompleto.includes('MILITAR') || textoCompleto.includes('NOME'))
+      ) {
+        continue;
+      }
+
+      let antiguidade = 0;
+      let nomeBruto = '';
+      let senha = '123456';
+
+      if (partes.length >= 3) {
+        // Formato de 3 colunas: [Antiguidade, Posto/Graduação/Nome, Senha]
+        const col0Num = parseInt(partes[0].replace(/[^\d]/g, ''), 10);
+        if (!isNaN(col0Num) && col0Num > 0) {
+          antiguidade = col0Num;
+          nomeBruto = partes[1];
+          senha = partes[2] || '123456';
+        } else {
+          // Caso col0 seja nome e col1 seja antiguidade ou vice-versa
+          nomeBruto = partes[0];
+          antiguidade = parseInt(partes[1].replace(/[^\d]/g, ''), 10) || (i + 1);
+          senha = partes[2] || '123456';
+        }
+      } else if (partes.length === 2) {
+        // Formato 2 colunas: ou [Antiguidade, Nome] ou [Nome, Senha]
+        const col0Num = parseInt(partes[0].replace(/[^\d]/g, ''), 10);
+        if (!isNaN(col0Num) && col0Num > 0 && isNaN(Number(partes[1]))) {
+          antiguidade = col0Num;
+          nomeBruto = partes[1];
+          senha = '123456';
+        } else {
+          antiguidade = i + 1;
+          nomeBruto = partes[0];
+          senha = partes[1] || '123456';
+        }
+      } else if (partes.length === 1) {
+        antiguidade = i + 1;
+        nomeBruto = partes[0];
+        senha = '123456';
+      }
+
+      const nomeLimpo = formatarNomeMilitarLimpo(nomeBruto.replace(/^["']|["']$/g, '').trim());
+      if (!nomeLimpo || nomeLimpo.length < 2) continue;
+      if (nomeLimpo.toUpperCase() === 'MILITAR' || nomeLimpo.toUpperCase() === 'NOME') continue;
+
+      const senhaLimpa = (senha || '123456').replace(/^["']|["']$/g, '').trim() || '123456';
+
+      novosParsed.push({
+        antiguidade: antiguidade > 0 ? antiguidade : (i + 1),
+        nome: nomeLimpo,
+        senha: senhaLimpa,
+        ordemArquivo: i + 1
+      });
+      count++;
+    }
+
+    // Ordena rigorosamente pela coluna Antiguidade ASC
+    novosParsed.sort((a, b) => {
+      if (a.antiguidade !== b.antiguidade) return a.antiguidade - b.antiguidade;
+      return a.ordemArquivo - b.ordemArquivo;
+    });
+
+    let listaMilitaresFinal: string[] = [];
+    if (modo === 'substituir') {
+      const vistos = new Set<string>();
+      novosParsed.forEach(p => {
+        const k = p.nome.toLowerCase();
+        if (!vistos.has(k)) {
+          vistos.add(k);
+          listaMilitaresFinal.push(p.nome);
+          senhasMap[p.nome] = p.senha;
+        }
+      });
+    } else {
+      // Modo adicionar: atualiza/insere
+      const existentesMap = new Set(militaresAtuais.map(m => m.toLowerCase()));
+      const novosNaoExistentes = novosParsed.filter(p => !existentesMap.has(p.nome.toLowerCase())).map(p => p.nome);
+      novosParsed.forEach(p => {
+        senhasMap[p.nome] = p.senha;
+      });
+      listaMilitaresFinal = [...militaresAtuais, ...novosNaoExistentes];
+    }
+
+    listaMilitaresFinal = limparListaMilitaresValidos(listaMilitaresFinal);
+
+    this.setMilitares(listaMilitaresFinal);
+    this.setOperadoresSenhas(senhasMap);
+    await syncComServidorCentral({ militares: listaMilitaresFinal, operadoresSenhas: senhasMap });
+
+    // Sincronização direta e persistente no Supabase (Nuvem)
+    let salvoNoSupabase = false;
+    let erroSupabase: string | undefined;
+    const sb = getSupabase();
+    if (sb && listaMilitaresFinal.length > 0) {
+      try {
+        if (modo === 'substituir') {
+          await sb.from('militares').delete().neq('nome', '');
+        }
+
+        // 1. Tabela militares (com antiguidade)
+        const militaresPayload = listaMilitaresFinal.map((nome, idx) => ({
+          nome,
+          antiguidade: idx + 1,
+          ativo: true
+        }));
+        for (let i = 0; i < militaresPayload.length; i += 100) {
+          const lote = militaresPayload.slice(i, i + 100);
+          await sb.from('militares').upsert(lote, { onConflict: 'nome' });
+        }
+
+        // 2. Tabela operadores (com senha criptografada via SHA-256)
+        const opPayload: Array<{ usuario: string; senha_hash: string; ativo: boolean; updated_at: string }> = [];
+        for (const nome of listaMilitaresFinal) {
+          const pass = senhasMap[nome] || '123456';
+          const hash = await hashSha256(pass);
+          opPayload.push({
+            usuario: nome,
+            senha_hash: hash,
+            ativo: true,
+            updated_at: new Date().toISOString()
+          });
+        }
+        for (let i = 0; i < opPayload.length; i += 100) {
+          const lote = opPayload.slice(i, i + 100);
+          await sb.from('operadores').upsert(lote, { onConflict: 'usuario' });
+        }
+
+        salvoNoSupabase = true;
+      } catch (err: any) {
+        console.error('Erro na sincronização de militares e operadores no Supabase:', err);
+        erroSupabase = err?.message || 'Falha ao sincronizar com o Supabase';
+      }
+    }
+
+    return {
+      total: linhas.length,
+      importados: count,
+      militares: listaMilitaresFinal,
+      operadores: Object.keys(senhasMap),
+      salvoNoSupabase,
+      erroSupabase
     };
   },
 

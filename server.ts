@@ -80,20 +80,37 @@ function readDb(): ServerDatabase {
   return initialDb;
 }
 
-function writeDb(data: Partial<ServerDatabase>): ServerDatabase {
+function writeDb(data: Partial<ServerDatabase> & { modo?: 'adicionar' | 'substituir' }): ServerDatabase {
   const current = readDb();
   let maxId = 0;
-  const regs = Array.isArray(data.registros) ? data.registros : current.registros;
+  let regs = current.registros;
+
+  if (Array.isArray(data.registros)) {
+    if (data.modo === 'substituir') {
+      regs = data.registros;
+    } else {
+      // Mesclagem inteligente por ID para evitar que acessos mobile sobrescrevam o histórico
+      const map = new Map<number | string, any>();
+      if (Array.isArray(current.registros)) {
+        current.registros.forEach(r => map.set(String(r.id), r));
+      }
+      data.registros.forEach(r => map.set(String(r.id), r));
+      regs = Array.from(map.values()).sort((a, b) => Number(b.id) - Number(a.id));
+    }
+  }
+
   if (Array.isArray(regs)) {
     regs.forEach((r: any) => {
       const num = Number(r.id);
       if (!isNaN(num) && num > maxId) maxId = num;
     });
   }
+
   const prox = Math.max(Number(data.proximoId) || Number(current.proximoId) || 1, maxId + 1);
   const updated: ServerDatabase = {
     ...current,
     ...data,
+    registros: regs,
     proximoId: prox,
     updatedAt: new Date().toISOString()
   };
@@ -106,6 +123,23 @@ app.get('/api/db', (_req, res) => {
   try {
     const data = readDb();
     res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/db/proximo-id', (_req, res) => {
+  try {
+    const current = readDb();
+    let maxId = 0;
+    if (Array.isArray(current.registros)) {
+      current.registros.forEach((r: any) => {
+        const num = Number(r.id);
+        if (!isNaN(num) && num > maxId) maxId = num;
+      });
+    }
+    const nextId = Math.max(Number(current.proximoId) || 1, maxId + 1);
+    res.json({ success: true, proximoId: nextId, maiorId: maxId });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

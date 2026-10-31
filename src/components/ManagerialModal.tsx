@@ -78,28 +78,83 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
   const [novoStatus, setNovoStatus] = useState('DISPONÍVEL');
   const [msgViatura, setMsgViatura] = useState('');
 
-  // Militar form state
+  // Militar form state & Antiguidade draft
   const [novoMilitarNome, setNovoMilitarNome] = useState('');
   const [msgMilitar, setMsgMilitar] = useState('');
   const [buscaMilitarAntiguidade, setBuscaMilitarAntiguidade] = useState('');
   const [draggedMilitarIndex, setDraggedMilitarIndex] = useState<number | null>(null);
   const [dragOverMilitarIndex, setDragOverMilitarIndex] = useState<number | null>(null);
 
+  // Rascunho da ordem de antiguidade para permitir salvar explicitamente
+  const [ordemMilitaresRascunho, setOrdemMilitaresRascunho] = useState<string[]>(militares);
+  const [temAlteracoesAntiguidade, setTemAlteracoesAntiguidade] = useState(false);
+  const [salvandoAntiguidade, setSalvandoAntiguidade] = useState(false);
+  const [msgAntiguidade, setMsgAntiguidade] = useState('');
+
+  // Sincroniza o rascunho com a prop militares sempre que não houver edições pendentes
+  useEffect(() => {
+    if (!temAlteracoesAntiguidade) {
+      setOrdemMilitaresRascunho(militares);
+    }
+  }, [militares, temAlteracoesAntiguidade]);
+
   const handleReordenarMilitares = (origemIdx: number, destinoIdx: number) => {
-    if (origemIdx === destinoIdx || origemIdx < 0 || destinoIdx < 0 || origemIdx >= militares.length || destinoIdx >= militares.length) return;
-    const novaLista = [...militares];
+    if (
+      origemIdx === destinoIdx ||
+      origemIdx < 0 ||
+      destinoIdx < 0 ||
+      origemIdx >= ordemMilitaresRascunho.length ||
+      destinoIdx >= ordemMilitaresRascunho.length
+    ) {
+      return;
+    }
+    const novaLista = [...ordemMilitaresRascunho];
     const [removido] = novaLista.splice(origemIdx, 1);
     novaLista.splice(destinoIdx, 0, removido);
-    onMilitaresChange(novaLista);
-    storageService.setMilitares(novaLista);
-    soundEffects.playSuccess();
+    setOrdemMilitaresRascunho(novaLista);
+    setTemAlteracoesAntiguidade(true);
+    soundEffects.playClick();
   };
 
   const handleMudarPosicaoAntiguidade = (idxAtual: number, valorInput: string) => {
     const num = parseInt(valorInput, 10);
     if (isNaN(num)) return;
-    const destinoIdx = Math.max(0, Math.min(militares.length - 1, num - 1));
+    const destinoIdx = Math.max(0, Math.min(ordemMilitaresRascunho.length - 1, num - 1));
     handleReordenarMilitares(idxAtual, destinoIdx);
+  };
+
+  const handleSalvarAlteracoesAntiguidade = async () => {
+    setSalvandoAntiguidade(true);
+    setMsgAntiguidade('Salvando ordem de antiguidade no banco online...');
+    try {
+      const res = await storageService.salvarMilitaresComAntiguidadeAsync(ordemMilitaresRascunho);
+      onMilitaresChange(ordemMilitaresRascunho);
+      setTemAlteracoesAntiguidade(false);
+      setMsgAntiguidade('Ordem de antiguidade salva com sucesso!');
+      soundEffects.playSuccess();
+      setTimeout(() => setMsgAntiguidade(''), 4000);
+      setAlertModal({
+        isOpen: true,
+        title: 'Antiguidade Salva no Banco Online',
+        message: res.mensagem,
+        type: 'success'
+      });
+    } catch (err: any) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Erro ao Salvar',
+        message: err?.message || 'Falha ao sincronizar ordem de antiguidade.',
+        type: 'error'
+      });
+    } finally {
+      setSalvandoAntiguidade(false);
+    }
+  };
+
+  const handleDescartarAlteracoesAntiguidade = () => {
+    setOrdemMilitaresRascunho(militares);
+    setTemAlteracoesAntiguidade(false);
+    soundEffects.playClick();
   };
 
   // Reset password state with textual search
@@ -112,6 +167,12 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
   const [textoPlanilha, setTextoPlanilha] = useState('');
   const [modoPlanilha, setModoPlanilha] = useState<'adicionar' | 'substituir'>('adicionar');
   const [msgPlanilha, setMsgPlanilha] = useState('');
+
+  // Upload/Planilha de Militares com Antiguidade, Posto/Graduação/Nome e Senha
+  const [textoPlanilhaMilitares, setTextoPlanilhaMilitares] = useState('');
+  const [modoPlanilhaMilitares, setModoPlanilhaMilitares] = useState<'adicionar' | 'substituir'>('adicionar');
+  const [msgPlanilhaMilitares, setMsgPlanilhaMilitares] = useState('');
+  const [processandoMilitaresPlanilha, setProcessandoMilitaresPlanilha] = useState(false);
 
   const [textoViaturas, setTextoViaturas] = useState('');
   const [modoViaturas, setModoViaturas] = useState<'adicionar' | 'substituir'>('adicionar');
@@ -197,13 +258,13 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
   // Lista de militares com índice de antiguidade e filtro de busca
   const militaresFiltradosAntiguidade = useMemo(() => {
     if (!buscaMilitarAntiguidade.trim()) {
-      return militares.map((nome, index) => ({ nome, antiguidade: index + 1, originalIndex: index }));
+      return ordemMilitaresRascunho.map((nome, index) => ({ nome, antiguidade: index + 1, originalIndex: index }));
     }
     const termo = buscaMilitarAntiguidade.toLowerCase().trim();
-    return militares
+    return ordemMilitaresRascunho
       .map((nome, index) => ({ nome, antiguidade: index + 1, originalIndex: index }))
       .filter(item => item.nome.toLowerCase().includes(termo));
-  }, [militares, buscaMilitarAntiguidade]);
+  }, [ordemMilitaresRascunho, buscaMilitarAntiguidade]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -306,6 +367,8 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
     const nomeFormatado = formatarNomeMilitarLimpo(novoMilitarNome);
     const atualizados = storageService.adicionarMilitar(nomeFormatado);
     onMilitaresChange(atualizados);
+    setOrdemMilitaresRascunho(atualizados);
+    setTemAlteracoesAntiguidade(false);
     setNovoMilitarNome('');
     setMsgMilitar(`Militar cadastrado com sucesso!`);
     setTimeout(() => setMsgMilitar(''), 3000);
@@ -323,8 +386,58 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
         setAlertModal(prev => ({ ...prev, isOpen: false }));
         const atualizados = storageService.excluirMilitar(nome);
         onMilitaresChange(atualizados);
+        setOrdemMilitaresRascunho(atualizados);
+        setTemAlteracoesAntiguidade(false);
       }
     });
+  };
+
+  const handleProcessarPlanilhaMilitares = async () => {
+    if (!textoPlanilhaMilitares.trim()) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Planilha Vazia',
+        message: 'Cole ou selecione o arquivo com a antiguidade, posto/graduação/nome e senha dos militares.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    setProcessandoMilitaresPlanilha(true);
+    setMsgPlanilhaMilitares('Processando e salvando militares no banco de dados online...');
+
+    try {
+      const res = await storageService.importarMilitaresComAntiguidadeESenha(
+        textoPlanilhaMilitares,
+        modoPlanilhaMilitares
+      );
+
+      setTextoPlanilhaMilitares('');
+      onMilitaresChange(res.militares);
+      setOrdemMilitaresRascunho(res.militares);
+      setTemAlteracoesAntiguidade(false);
+      if (onOperadoresChange) onOperadoresChange(res.operadores);
+
+      setMsgPlanilhaMilitares(`Sucesso! ${res.importados} militares importados e persistidos no banco de dados online.`);
+      soundEffects.playSuccess();
+
+      setAlertModal({
+        isOpen: true,
+        title: 'Militares Importados com Sucesso',
+        message: `${res.importados} militares foram importados com antiguidade e senhas criptografadas no banco de dados online.`,
+        type: 'success'
+      });
+    } catch (err: any) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Erro na Importação',
+        message: err?.message || 'Falha ao importar planilha de militares.',
+        type: 'error'
+      });
+    } finally {
+      setProcessandoMilitaresPlanilha(false);
+      setTimeout(() => setMsgPlanilhaMilitares(''), 5000);
+    }
   };
 
   const handleResetarSenha = (e: React.FormEvent) => {
@@ -1066,27 +1179,79 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                   <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
                     <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between flex-wrap gap-3">
                       <div>
-                        <h4 className="text-xs font-black uppercase text-slate-900 flex items-center gap-2">
-                          <Users className="w-4 h-4 text-red-700" />
-                          <span>Banco de Militares &bull; Ordem de Antiguidade ({militares.length} Militares)</span>
-                        </h4>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs font-black uppercase text-slate-900 flex items-center gap-2">
+                            <Users className="w-4 h-4 text-red-700" />
+                            <span>Banco de Militares &bull; Ordem de Antiguidade ({ordemMilitaresRascunho.length} Militares)</span>
+                          </h4>
+                          {temAlteracoesAntiguidade && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 animate-pulse flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3 text-amber-600" /> Alterações pendentes não salvas
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                          Arraste pela alça <strong className="text-slate-700">⠿</strong>, altere o número da coluna <strong className="text-slate-700">Antiguidade</strong> ou use as setas para definir a ordem hierárquica. Esta sequência orienta todas as telas de escala e despacho.
+                          Arraste pela alça <strong className="text-slate-700">⠿</strong>, altere o número da coluna <strong className="text-slate-700">Antiguidade</strong> ou use as setas ▲/▼. Em seguida, clique no botão <strong className="text-emerald-700">Salvar Alterações de Antiguidade</strong> para persistir no banco online.
                         </p>
                       </div>
 
-                      {/* Busca rápida na lista */}
-                      <div className="relative min-w-[200px]">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input
-                          type="text"
-                          value={buscaMilitarAntiguidade}
-                          onChange={e => setBuscaMilitarAntiguidade(e.target.value)}
-                          placeholder="Filtrar por nome/graduação..."
-                          className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-red-700"
-                        />
+                      {/* Botões de Ação e Busca */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {temAlteracoesAntiguidade && (
+                          <button
+                            type="button"
+                            onClick={handleDescartarAlteracoesAntiguidade}
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition-colors cursor-pointer"
+                          >
+                            Descartar
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={handleSalvarAlteracoesAntiguidade}
+                          disabled={salvandoAntiguidade}
+                          className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer shadow-md transition-all ${
+                            temAlteracoesAntiguidade
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400 ring-offset-1 shadow-emerald-200 animate-pulse'
+                              : 'bg-slate-900 hover:bg-slate-800 text-white'
+                          }`}
+                          title="Salvar a nova sequência de antiguidade no banco de dados online"
+                        >
+                          <CheckCircle2 className={`w-4 h-4 ${temAlteracoesAntiguidade ? 'text-emerald-200' : 'text-slate-300'}`} />
+                          <span>{salvandoAntiguidade ? 'Salvando no Banco...' : 'Salvar Alterações de Antiguidade'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('planilhas')}
+                          className="px-3 py-2 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                          title="Importar planilha de militares com antiguidade e senhas"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Importar Planilha</span>
+                        </button>
+
+                        {/* Busca rápida na lista */}
+                        <div className="relative min-w-[180px]">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={buscaMilitarAntiguidade}
+                            onChange={e => setBuscaMilitarAntiguidade(e.target.value)}
+                            placeholder="Filtrar militar..."
+                            className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-red-700"
+                          />
+                        </div>
                       </div>
                     </div>
+
+                    {msgAntiguidade && (
+                      <div className="mx-4 mt-3 p-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{msgAntiguidade}</span>
+                      </div>
+                    )}
 
                     <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
                       <table className="w-full text-left border-collapse text-xs">
@@ -1154,7 +1319,7 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                                       <input
                                         type="number"
                                         min="1"
-                                        max={militares.length}
+                                        max={ordemMilitaresRascunho.length}
                                         defaultValue={item.antiguidade}
                                         key={item.nome + '_' + item.antiguidade}
                                         onBlur={(e) => handleMudarPosicaoAntiguidade(origIdx, e.target.value)}
@@ -1164,7 +1329,7 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                                           }
                                         }}
                                         className="w-12 text-center text-xs font-bold border border-slate-300 rounded px-1 py-0.5 bg-white text-slate-800 focus:outline-none focus:border-red-700"
-                                        title="Digite o número e pressione Enter para alterar a antiguidade"
+                                        title="Digite o número da antiguidade e clique em Salvar Alterações de Antiguidade"
                                       />
                                       <div className="flex flex-col">
                                         <button
@@ -1433,17 +1598,20 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                     </div>
                   </div>
 
-                  {/* Seção 2: Upload de Operadores e Senhas */}
+                  {/* Seção 2: Upload da Planilha dos Militares (Antiguidade, Posto/Graduação/Nome e Senha) */}
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <Users className="w-5 h-5 text-blue-600" />
                         <div>
-                          <h4 className="text-xs font-black uppercase text-slate-800">
-                            2. Upload da Lista de Operadores e Senhas
+                          <h4 className="text-xs font-black uppercase text-slate-800 flex items-center gap-2">
+                            <span>2. Upload de Militares com Antiguidade, Nome e Senha</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-blue-800">
+                              Banco Online &bull; Supabase
+                            </span>
                           </h4>
                           <p className="text-[11px] text-slate-500 font-medium">
-                            Formato: &quot;Operador; Senha&quot; (exemplo: SubTen Dantas; 123456 ou separado por tabulação)
+                            Formato: <strong className="text-slate-700">&quot;Antiguidade; Posto/Graduação/Nome; Senha&quot;</strong> (ex: 1; SubTen Dantas; 123456 &bull; aceita separador por tabulação do Excel ou ponto e vírgula)
                           </p>
                         </div>
                       </div>
@@ -1451,52 +1619,54 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                       <div className="flex items-center gap-2">
                         <label className="text-[11px] font-bold text-slate-600">Modo:</label>
                         <select
-                          value={modoOperadores}
-                          onChange={e => setModoOperadores(e.target.value as any)}
-                          className="px-2 py-1 text-xs border border-slate-300 rounded-lg bg-white"
+                          value={modoPlanilhaMilitares}
+                          onChange={e => setModoPlanilhaMilitares(e.target.value as any)}
+                          className="px-2 py-1 text-xs border border-slate-300 rounded-lg bg-white font-bold"
                         >
-                          <option value="adicionar">Adicionar / Atualizar</option>
-                          <option value="substituir">Substituir todos</option>
+                          <option value="adicionar">Adicionar / Atualizar Militares</option>
+                          <option value="substituir">Substituir todo o banco de militares</option>
                         </select>
                       </div>
                     </div>
 
-                    {msgOperadores && (
+                    {msgPlanilhaMilitares && (
                       <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        <span>{msgOperadores}</span>
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                        <span>{msgPlanilhaMilitares}</span>
                       </div>
                     )}
 
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 hover:border-slate-400 rounded-lg text-xs font-bold text-slate-700 cursor-pointer shadow-2xs">
                         <Upload className="w-4 h-4 text-blue-600" />
-                        <span>Carregar Arquivo (.csv, .txt)</span>
+                        <span>Carregar Arquivo (.csv, .tsv, .txt)</span>
                         <input
                           type="file"
                           accept=".csv,.txt,.tsv"
-                          onChange={e => handleFileUpload(e, setTextoOperadores)}
+                          onChange={e => handleFileUpload(e, setTextoPlanilhaMilitares)}
                           className="hidden"
                         />
                       </label>
-                      <span className="text-xs text-slate-400">ou cole os dados no formato &quot;Operador; Senha&quot;:</span>
+                      <span className="text-xs text-slate-400">ou cole diretamente os dados copiados do Excel/Sheets:</span>
                     </div>
 
                     <textarea
-                      rows={3}
-                      value={textoOperadores}
-                      onChange={e => setTextoOperadores(corrigirAcentuacaoTexto(e.target.value))}
-                      placeholder="SubTen Dantas; 123456&#10;1º Sgt Silva; 654321&#10;Cb Costa; 121314"
+                      rows={5}
+                      value={textoPlanilhaMilitares}
+                      onChange={e => setTextoPlanilhaMilitares(corrigirAcentuacaoTexto(e.target.value))}
+                      placeholder="1; SubTen Dantas; 123456&#10;2; 1º Sgt Silva; 654321&#10;3; 2º Sgt Cardoso; senha123&#10;4; Cb Costa; 789101"
                       className="w-full p-3 font-mono text-[11px] bg-white border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-red-700"
                     />
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
                       <button
                         type="button"
-                        onClick={handleProcessarOperadores}
-                        className="py-2 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                        onClick={handleProcessarPlanilhaMilitares}
+                        disabled={processandoMilitaresPlanilha}
+                        className="py-2.5 px-5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
                       >
-                        <Upload className="w-4 h-4" /> Importar Operadores
+                        <Upload className="w-4 h-4" />
+                        <span>{processandoMilitaresPlanilha ? 'Sincronizando com Banco Online...' : 'Importar e Salvar Militares no Banco Online'}</span>
                       </button>
                     </div>
                   </div>
