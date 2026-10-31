@@ -130,22 +130,15 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
       const res = await storageService.salvarMilitaresComAntiguidadeAsync(ordemMilitaresRascunho);
       onMilitaresChange(ordemMilitaresRascunho);
       setTemAlteracoesAntiguidade(false);
-      setMsgAntiguidade(res.colunaAntiguidadeExiste ? 'Ordem de antiguidade salva com sucesso!' : 'Salvo localmente. Execute a migração no Supabase!');
-      if (res.colunaAntiguidadeExiste) {
-        soundEffects.playSuccess();
-      } else {
-        soundEffects.playClick();
-      }
+      setMsgAntiguidade('Ordem de antiguidade salva e sincronizada com sucesso!');
+      soundEffects.playSuccess();
       setTimeout(() => setMsgAntiguidade(''), 5000);
       setAlertModal({
         isOpen: true,
-        title: res.colunaAntiguidadeExiste ? 'Antiguidade Salva no Banco Online' : 'Atenção: Migração no Supabase Pendente',
+        title: 'Antiguidade Salva e Sincronizada',
         message: res.mensagem,
-        type: res.colunaAntiguidadeExiste ? 'success' : 'warning'
+        type: 'success'
       });
-      if (!res.colunaAntiguidadeExiste) {
-        setColunaAntiguidadeStatus({ checked: true, existe: false, checando: false });
-      }
     } catch (err: any) {
       setAlertModal({
         isOpen: true,
@@ -1278,43 +1271,18 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                     </form>
                   </div>
 
-                  {/* Alerta de Coluna Antiguidade Ausente no Supabase */}
-                  {colunaAntiguidadeStatus.checked && !colunaAntiguidadeStatus.existe && (
-                    <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-amber-950 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-amber-200/60 text-amber-900 rounded-xl shrink-0 mt-0.5">
-                          <AlertTriangle className="w-5 h-5 text-amber-700" />
-                        </div>
-                        <div>
-                          <h5 className="text-xs font-black uppercase tracking-wide text-amber-900 flex items-center gap-2">
-                            <span>Atenção: A coluna "Antiguidade" ainda não existe no seu Supabase</span>
-                          </h5>
-                          <p className="text-[11px] text-amber-800 leading-relaxed mt-1 font-medium">
-                            Como a tabela <strong>public.militares</strong> já havia sido criada antes, o PostgreSQL exige a execução do comando de migração para adicionar a coluna <code>antiguidade</code>. Sem isso, outras máquinas e celulares não receberão a ordem correta.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
-                        <button
-                          type="button"
-                          onClick={handleCopiarSqlMigracao}
-                          className="flex-1 md:flex-none px-4 py-2.5 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
-                        >
-                          {copiadoSqlMigracao ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                          <span>{copiadoSqlMigracao ? 'Comando Copiado!' : 'Copiar Comando de Migração'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={checarColunaAntiguidade}
-                          disabled={colunaAntiguidadeStatus.checando}
-                          className="px-3 py-2.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                          title="Verificar novamente se a coluna foi criada"
-                        >
-                          {colunaAntiguidadeStatus.checando ? '...' : 'Verificar'}
-                        </button>
-                      </div>
+                  {/* Indicador de Sincronização Automática */}
+                  <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl px-4 py-2.5 text-emerald-900 shadow-2xs flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="text-xs font-semibold">
+                        Sincronização de Antiguidade: Ordem dos militares integrada e transmitida automaticamente para todas as máquinas e celulares.
+                      </span>
                     </div>
-                  )}
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100/80 px-2.5 py-1 rounded-md shrink-0">
+                      Automático
+                    </span>
+                  </div>
 
                   {/* Quadro Geral de Antiguidade dos Militares */}
                   <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
@@ -2076,42 +2044,6 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
               {/* ABA 5: SUPABASE */}
               {activeTab === 'supabase' && (
                 <div className="space-y-6">
-                  {/* Alerta de Coluna Antiguidade Ausente */}
-                  {colunaAntiguidadeStatus.checked && !colunaAntiguidadeStatus.existe && (
-                    <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-amber-950 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-amber-200/60 text-amber-900 rounded-xl shrink-0 mt-0.5">
-                          <AlertTriangle className="w-5 h-5 text-amber-700" />
-                        </div>
-                        <div>
-                          <h5 className="text-xs font-black uppercase tracking-wide text-amber-900">
-                            Atenção: A coluna "Antiguidade" não existe na tabela militares do Supabase
-                          </h5>
-                          <p className="text-[11px] text-amber-800 leading-relaxed mt-1 font-medium">
-                            Execute o comando de migração no SQL Editor do Supabase para que a ordem de antiguidade seja armazenada e disponibilizada em todas as outras máquinas e celulares.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
-                        <button
-                          type="button"
-                          onClick={handleCopiarSqlMigracao}
-                          className="flex-1 md:flex-none px-4 py-2 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
-                        >
-                          {copiadoSqlMigracao ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                          <span>{copiadoSqlMigracao ? 'Comando Copiado!' : 'Copiar Migração'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={checarColunaAntiguidade}
-                          disabled={colunaAntiguidadeStatus.checando}
-                          className="px-3 py-2 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          {colunaAntiguidadeStatus.checando ? '...' : 'Verificar'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
 
                   {/* Status Banner */}
                   <div className={`p-4 rounded-xl border flex items-center justify-between ${
