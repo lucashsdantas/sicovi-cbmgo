@@ -64,14 +64,18 @@ function readDb(): ServerDatabase {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       let maxId = 0;
+      const cleanRegs: any[] = [];
       if (Array.isArray(parsed.registros)) {
         parsed.registros.forEach((r: any) => {
           const num = Number(r.id);
+          // Filtra registro fantasma de teste 113614 ou IDs anômalos
+          if (String(r.id) === '113614' || num >= 100000) return;
+          cleanRegs.push(r);
           if (!isNaN(num) && num > maxId) maxId = num;
         });
       }
-      const prox = maxId > 0 ? maxId + 1 : (Number(parsed.proximoId) || 1);
-      return { ...initialDb, ...parsed, proximoId: prox };
+      const prox = maxId > 0 ? maxId + 1 : 1;
+      return { ...initialDb, ...parsed, registros: cleanRegs, proximoId: prox };
     }
   } catch (err) {
     console.error('Erro ao ler database.json:', err);
@@ -86,15 +90,17 @@ function writeDb(data: Partial<ServerDatabase> & { modo?: 'adicionar' | 'substit
   let regs = current.registros;
 
   if (Array.isArray(data.registros)) {
+    // Filtra o ID fantasma de teste 113614 ou IDs espúrios >= 100000
+    const limpados = data.registros.filter((r: any) => String(r.id) !== '113614' && (isNaN(Number(r.id)) || Number(r.id) < 100000));
     if (data.modo === 'substituir') {
-      regs = data.registros;
+      regs = limpados;
     } else {
-      // Mesclagem inteligente por ID para evitar que acessos mobile sobrescrevam o histórico
+      // Mesclagem por ID: atualiza existentes ou insere novos
       const map = new Map<number | string, any>();
       if (Array.isArray(current.registros)) {
         current.registros.forEach(r => map.set(String(r.id), r));
       }
-      data.registros.forEach(r => map.set(String(r.id), r));
+      limpados.forEach(r => map.set(String(r.id), r));
       regs = Array.from(map.values()).sort((a, b) => Number(b.id) - Number(a.id));
     }
   }
@@ -102,11 +108,11 @@ function writeDb(data: Partial<ServerDatabase> & { modo?: 'adicionar' | 'substit
   if (Array.isArray(regs)) {
     regs.forEach((r: any) => {
       const num = Number(r.id);
-      if (!isNaN(num) && num > maxId) maxId = num;
+      if (!isNaN(num) && num < 100000 && num > maxId) maxId = num;
     });
   }
 
-  const prox = maxId > 0 ? maxId + 1 : (Number(data.proximoId) || Number(current.proximoId) || 1);
+  const prox = maxId > 0 ? maxId + 1 : 1;
   const updated: ServerDatabase = {
     ...current,
     ...data,
@@ -135,10 +141,10 @@ app.get('/api/db/proximo-id', (_req, res) => {
     if (Array.isArray(current.registros)) {
       current.registros.forEach((r: any) => {
         const num = Number(r.id);
-        if (!isNaN(num) && num > maxId) maxId = num;
+        if (!isNaN(num) && num < 100000 && num > maxId) maxId = num;
       });
     }
-    const nextId = maxId > 0 ? maxId + 1 : (Number(current.proximoId) || 1);
+    const nextId = maxId > 0 ? maxId + 1 : 1;
     res.json({ success: true, proximoId: nextId, maiorId: maxId });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -150,6 +156,38 @@ app.post('/api/db/save', (req, res) => {
     const payload = req.body;
     const updated = writeDb(payload);
     res.json({ success: true, data: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/db/delete-registro', (req, res) => {
+  try {
+    const { id } = req.body;
+    if (id === undefined || id === null) {
+      return res.status(400).json({ success: false, error: 'ID do registro não informado.' });
+    }
+    const current = readDb();
+    const idStr = String(id).trim();
+    const filtrados = (current.registros || []).filter(
+      (r: any) => String(r.id).trim() !== idStr && Number(r.id) !== Number(idStr)
+    );
+
+    let maxId = 0;
+    filtrados.forEach((r: any) => {
+      const num = Number(r.id);
+      if (!isNaN(num) && num < 100000 && num > maxId) maxId = num;
+    });
+    const prox = maxId > 0 ? maxId + 1 : 1;
+
+    const updated: ServerDatabase = {
+      ...current,
+      registros: filtrados,
+      proximoId: prox,
+      updatedAt: new Date().toISOString()
+    };
+    fs.writeFileSync(DB_FILE, JSON.stringify(updated, null, 2), 'utf-8');
+    res.json({ success: true, proximoId: prox, registrosRestantes: filtrados.length });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

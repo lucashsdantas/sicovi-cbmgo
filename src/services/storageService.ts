@@ -785,22 +785,23 @@ export const storageService = {
     const atuais = this.getRegistros();
     let maxId = 0;
     atuais.forEach(item => {
+      if (String(item.id) === '113614') return;
       const num = Number(item.id);
-      if (!isNaN(num) && num > maxId) maxId = num;
+      if (!isNaN(num) && num < 100000 && num > maxId) maxId = num;
     });
     return maxId;
   },
 
   getProximoId(): number {
     const maxId = this.getMaiorIdRegistros();
-    // Sempre usa rigorosamente o último ID somado com 1
+    // Sempre usa rigorosamente o maior ID dos registros existentes somado com 1
     if (maxId > 0) {
       return maxId + 1;
     }
     const stored = localStorage.getItem(STORAGE_KEY_PROXIMO_ID);
     if (stored !== null && stored !== '') {
       const parsed = parseInt(stored, 10);
-      if (!isNaN(parsed) && parsed > 0) {
+      if (!isNaN(parsed) && parsed > 0 && parsed < 100000) {
         return parsed;
       }
     }
@@ -809,7 +810,9 @@ export const storageService = {
 
   setProximoId(novoId: number): void {
     const safeId = Math.max(1, Math.floor(novoId));
-    localStorage.setItem(STORAGE_KEY_PROXIMO_ID, String(safeId));
+    if (safeId < 100000) {
+      localStorage.setItem(STORAGE_KEY_PROXIMO_ID, String(safeId));
+    }
   },
 
   consumirProximoId(qtd: number = 1): number[] {
@@ -837,10 +840,15 @@ export const storageService = {
     const sb = getSupabase();
     if (!sb) return null;
     try {
-      const { data, error } = await sb.from('registros').select('id').order('id', { ascending: false }).limit(1);
+      const { data, error } = await sb
+        .from('registros')
+        .select('id')
+        .lt('id', 100000)
+        .order('id', { ascending: false })
+        .limit(1);
       if (!error && data && data.length > 0) {
         const val = Number(data[0].id);
-        return !isNaN(val) ? val : null;
+        return (!isNaN(val) && val < 100000) ? val : null;
       }
     } catch {
       return null;
@@ -1045,15 +1053,41 @@ export const storageService = {
     return { ids: idsCriados, registros: atuais };
   },
 
-  excluirRegistro(id: number | string): RegistroDespacho[] {
+  async excluirRegistro(id: number | string): Promise<RegistroDespacho[]> {
     const atuais = this.getRegistros();
-    const filtrados = atuais.filter(r => String(r.id) !== String(id));
+    const filtrados = atuais.filter(r => String(r.id) !== String(id) && Number(r.id) !== Number(id));
     localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(filtrados));
-    syncComServidorCentral({ registros: filtrados });
 
+    // Recalcula o próximo ID local imediatamente com base nos registros restantes
+    const maxId = this.getMaiorIdRegistros();
+    this.setProximoId(maxId > 0 ? maxId + 1 : 1);
+
+    // 1. Exclui no Servidor Central Express pelo endpoint dedicado
+    try {
+      await fetch('/api/db/delete-registro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+    } catch (e) {
+      console.warn('Erro ao deletar registro no servidor central:', e);
+    }
+
+    // 2. Garante persistência com modo substituir no servidor central
+    await syncComServidorCentral({ registros: filtrados, modo: 'substituir', proximoId: maxId > 0 ? maxId + 1 : 1 });
+
+    // 3. Exclui definitivamente no Supabase (tanto por Number quanto por String)
     const sb = getSupabase();
     if (sb) {
-      sb.from('registros').delete().eq('id', id).then();
+      try {
+        const numId = Number(id);
+        if (!isNaN(numId)) {
+          await sb.from('registros').delete().eq('id', numId);
+        }
+        await sb.from('registros').delete().eq('id', String(id));
+      } catch (e) {
+        console.warn('Erro ao deletar registro no Supabase:', e);
+      }
     }
 
     return filtrados;
@@ -2215,50 +2249,44 @@ export const storageService = {
       }
 
       if (!errRegs && regs) {
-        const novosFormatados: RegistroDespacho[] = regs.map((r: any) => ({
-          id: !isNaN(Number(r.id)) ? Number(r.id) : r.id,
-          viatura: r.viatura,
-          condutor: r.condutor,
-          equipe: r.equipe || '',
-          destino: r.destino,
-          bairro: r.bairro || '',
-          rai: r.rai || '',
-          natureza: r.natureza || '',
-          saida: r.saida ? formatarDataHoraPtBr(r.saida) : '',
-          kmSaida: r.km_saida,
-          chegada: r.chegada ? formatarDataHoraPtBr(r.chegada) : '',
-          kmChegada: r.km_chegada || '',
-          operador: r.operador
-        }));
+        // Exclui registros espúrios ou fantasmas do Supabase se existirem
+        try {
+          await sb.from('registros').delete().eq('id', 113614);
+          await sb.from('registros').delete().eq('id', '113614');
+          await sb.from('registros').delete().gte('id', 100000);
+        } catch {}
 
-        const mapa = new Map<number | string, RegistroDespacho>();
-        novosFormatados.forEach(r => mapa.set(Number(r.id) || r.id, r));
-        const anteriores = this.getRegistros();
-        anteriores.forEach(r => {
-          const key = Number(r.id) || r.id;
-          if (!mapa.has(key)) {
-            mapa.set(key, r);
-          }
-        });
-        const mesclados = Array.from(mapa.values())
-          .map(r => ({
-            ...r,
-            id: !isNaN(Number(r.id)) ? Number(r.id) : r.id
+        const novosFormatados: RegistroDespacho[] = regs
+          .filter((r: any) => String(r.id) !== '113614' && (isNaN(Number(r.id)) || Number(r.id) < 100000))
+          .map((r: any) => ({
+            id: !isNaN(Number(r.id)) ? Number(r.id) : r.id,
+            viatura: r.viatura,
+            condutor: r.condutor,
+            equipe: r.equipe || '',
+            destino: r.destino,
+            bairro: r.bairro || '',
+            rai: r.rai || '',
+            natureza: r.natureza || '',
+            saida: r.saida ? formatarDataHoraPtBr(r.saida) : '',
+            kmSaida: r.km_saida,
+            chegada: r.chegada ? formatarDataHoraPtBr(r.chegada) : '',
+            kmChegada: r.km_chegada || '',
+            operador: r.operador
           }))
           .sort((a, b) => Number(b.id) - Number(a.id));
-        localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(mesclados));
-        // Sincroniza também com o servidor central Express
-        await syncComServidorCentral({ registros: mesclados });
+
+        localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(novosFormatados));
+        // Sincroniza com o servidor central Express substituindo o estado
+        await syncComServidorCentral({ registros: novosFormatados, modo: 'substituir' });
 
         // Garante que o próximo ID na sequência seja sempre o maior ID da nuvem acrescido de 1
-        const maxMesclado = mesclados.reduce((acc, curr) => {
-          const num = Number(curr.id);
-          return !isNaN(num) && num > acc ? num : acc;
-        }, 0);
-        if (maxMesclado > 0) {
-          localStorage.setItem('sicovi_maior_id_nuvem', String(maxMesclado));
-          this.setProximoId(maxMesclado + 1);
-        }
+        let maxSupabase = 0;
+        novosFormatados.forEach(r => {
+          const num = Number(r.id);
+          if (!isNaN(num) && num < 100000 && num > maxSupabase) maxSupabase = num;
+        });
+        const prox = maxSupabase > 0 ? maxSupabase + 1 : 1;
+        this.setProximoId(prox);
       }
 
       return {
@@ -2307,24 +2335,21 @@ export const storageService = {
           if (Object.keys(locO).length > 0) syncComServidorCentral({ operadoresSenhas: locO });
         }
 
-        // Registros: NUNCA SOBRESCREVER COM ARRAY VAZIO!
-        const serverRegs = Array.isArray(d.registros) ? d.registros : [];
-        const localRegs = this.getRegistros();
+        // Registros: O Servidor Central Express é a fonte oficial única de registros
+        if (Array.isArray(d.registros)) {
+          const serverRegs = d.registros
+            .filter((r: any) => String(r.id) !== '113614' && (isNaN(Number(r.id)) || Number(r.id) < 100000))
+            .sort((a: any, b: any) => Number(b.id) - Number(a.id));
+          localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(serverRegs));
 
-        if (serverRegs.length > 0) {
-          const mapa = new Map<number | string, RegistroDespacho>();
-          serverRegs.forEach((r: any) => mapa.set(Number(r.id) || r.id, r));
-          localRegs.forEach((r: any) => {
-            const k = Number(r.id) || r.id;
-            if (!mapa.has(k)) mapa.set(k, r);
+          // Atualiza próximo ID rigorosamente como o maior ID ativo + 1
+          let maxId = 0;
+          serverRegs.forEach((r: any) => {
+            const num = Number(r.id);
+            if (!isNaN(num) && num < 100000 && num > maxId) maxId = num;
           });
-          const mesclados = Array.from(mapa.values()).sort((a, b) => Number(b.id) - Number(a.id));
-          localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(mesclados));
-          if (localRegs.length > serverRegs.length) {
-            syncComServidorCentral({ registros: mesclados });
-          }
-        } else if (localRegs.length > 0) {
-          syncComServidorCentral({ registros: localRegs });
+          const prox = maxId > 0 ? maxId + 1 : 1;
+          this.setProximoId(prox);
         }
 
         // Bairros
@@ -2343,16 +2368,6 @@ export const storageService = {
         // Destinos
         if (Array.isArray(d.destinos) && d.destinos.length > 0) {
           localStorage.setItem(STORAGE_KEY_DESTINOS, JSON.stringify(d.destinos));
-        }
-
-        // Próximo ID
-        if (d.proximoId) {
-          const localProx = this.getProximoId();
-          if (Number(d.proximoId) > localProx) {
-            localStorage.setItem(STORAGE_KEY_PROXIMO_ID, String(d.proximoId));
-          } else if (localProx > Number(d.proximoId)) {
-            syncComServidorCentral({ proximoId: localProx });
-          }
         }
 
         // Supabase Config
@@ -2414,13 +2429,24 @@ export const storageService = {
       const rawRegs = localStorage.getItem(STORAGE_KEY_REGISTROS);
       if (rawRegs) {
         const parsed = JSON.parse(rawRegs);
-        if (
-          Array.isArray(parsed) &&
-          parsed.length > 0 &&
-          parsed.every(r => Number(r.id) >= 99 && Number(r.id) <= 105 && nomesFicticios.has((r.condutor || '').toLowerCase()))
-        ) {
-          localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify([]));
+        if (Array.isArray(parsed)) {
+          // Filtra fictícios e IDs anômalos
+          const limpos = parsed.filter(
+            (r: any) =>
+              String(r.id) !== '113614' &&
+              (isNaN(Number(r.id)) || Number(r.id) < 100000) &&
+              !(Number(r.id) >= 99 && Number(r.id) <= 105 && nomesFicticios.has((r.condutor || '').toLowerCase()))
+          );
+          if (limpos.length !== parsed.length) {
+            localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(limpos));
+          }
         }
+      }
+
+      // Limpeza de chave residual de teste
+      const storedProx = localStorage.getItem(STORAGE_KEY_PROXIMO_ID);
+      if (storedProx && Number(storedProx) >= 100000) {
+        localStorage.removeItem(STORAGE_KEY_PROXIMO_ID);
       }
       localStorage.removeItem('sicovi_maior_id_nuvem');
     } catch {}

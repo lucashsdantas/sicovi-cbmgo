@@ -213,9 +213,10 @@ export default function App() {
     setCurrentPage(1);
   }, []);
 
-  // Initialize with Central DB / Supabase sync and smart initial filter
-  useEffect(() => {
-    storageService.carregarDoBancoCentral().then(() => {
+  // Carrega e sincroniza todos os dados centrais (servidor e local)
+  const carregarDadosCentrais = useCallback(async () => {
+    try {
+      await storageService.carregarDoBancoCentral();
       const vtrs = storageService.getViaturas();
       const mils = storageService.getMilitares();
       const ops = storageService.getOperadores();
@@ -227,37 +228,69 @@ export default function App() {
       setOperadores(ops);
       setRegistros(regs);
       setEscalas(esc);
+      return { vtrs, mils, ops, regs, esc };
+    } catch (e) {
+      console.warn('Erro ao carregar dados centrais:', e);
+      return null;
+    }
+  }, []);
 
-      const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000;
-      const temRecentes = regs.some(r => {
-        const dt = parseDateTimeFormat(r.saida);
-        return dt && dt.getTime() >= umDiaAtras;
-      });
-      applyPresetData(temRecentes ? '24h' : 'tudo');
+  // Initialize with Central DB / Supabase sync and smart initial filter
+  useEffect(() => {
+    carregarDadosCentrais().then(dados => {
+      if (dados && dados.regs.length > 0) {
+        const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000;
+        const temRecentes = dados.regs.some(r => {
+          const dt = parseDateTimeFormat(r.saida);
+          return dt && dt.getTime() >= umDiaAtras;
+        });
+        applyPresetData(temRecentes ? '24h' : 'tudo');
+      }
 
       if (isSupabaseConfigured()) {
         setIsSyncing(true);
         storageService.sincronizarComSupabase().then(res => {
           setIsSyncing(false);
           if (res.success) {
-            const regsAtualizados = storageService.getRegistros();
-            setViaturas(storageService.getViaturas());
-            setMilitares(storageService.getMilitares());
-            setOperadores(storageService.getOperadores());
-            setRegistros(regsAtualizados);
-            setEscalas(storageService.getEscalas());
-            if (regsAtualizados.length > 0) {
-              const temRecentesSupabase = regsAtualizados.some(r => {
-                const dt = parseDateTimeFormat(r.saida);
-                return dt && dt.getTime() >= umDiaAtras;
-              });
-              applyPresetData(temRecentesSupabase ? '24h' : 'tudo');
-            }
+            carregarDadosCentrais();
           }
         });
       }
     });
-  }, [applyPresetData]);
+  }, [applyPresetData, carregarDadosCentrais]);
+
+  // Sincronização periódica em tempo real com o servidor central (a cada 3.5s)
+  useEffect(() => {
+    const isAnyModalOpen =
+      isDispatchModalOpen ||
+      isEscalaModalOpen ||
+      isSupportSelectorOpen ||
+      isMilitarySelectorOpen ||
+      isVehicleSelectorOpen ||
+      isKmVerificationOpen ||
+      isDeleteConfirmOpen ||
+      isMilitaryRegisterOpen ||
+      isChangePasswordOpen;
+
+    if (isAnyModalOpen) return;
+
+    const fastPoll = setInterval(() => {
+      carregarDadosCentrais();
+    }, 3500);
+
+    return () => clearInterval(fastPoll);
+  }, [
+    carregarDadosCentrais,
+    isDispatchModalOpen,
+    isEscalaModalOpen,
+    isSupportSelectorOpen,
+    isMilitarySelectorOpen,
+    isVehicleSelectorOpen,
+    isKmVerificationOpen,
+    isDeleteConfirmOpen,
+    isMilitaryRegisterOpen,
+    isChangePasswordOpen
+  ]);
 
   // Refs para monitorar os filtros ativos no intervalo de 60 segundos sem closures defasadas
   const presetAtivoRef = useRef(presetAtivo);
@@ -316,17 +349,11 @@ export default function App() {
           if (isSupabaseConfigured()) {
             storageService.sincronizarComSupabase().then(res => {
               if (res.success) {
-                setRegistros([...storageService.getRegistros()]);
-                setViaturas([...storageService.getViaturas()]);
-                setEscalas([...storageService.getEscalas()]);
-                setMilitares([...storageService.getMilitares()]);
+                carregarDadosCentrais();
               }
             });
           } else {
-            setRegistros([...storageService.getRegistros()]);
-            setViaturas([...storageService.getViaturas()]);
-            setEscalas([...storageService.getEscalas()]);
-            setMilitares([...storageService.getMilitares()]);
+            carregarDadosCentrais();
           }
 
           setTimeout(() => {
@@ -340,6 +367,7 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [
+    carregarDadosCentrais,
     isDispatchModalOpen,
     isEscalaModalOpen,
     isSupportSelectorOpen,
@@ -666,13 +694,16 @@ export default function App() {
       markRecentlySaved(res.id);
       setIsDispatchModalOpen(false);
       const isEdit = Boolean(registroEmEdicao && registroEmEdicao.id !== 'PENDENTE');
-      showToast('Registro Salvo!', `Despacho #${res.id} gravado com sucesso no banco de dados.`);
+      showToast(
+        isEdit ? 'Registro Atualizado!' : 'Registro Salvo!',
+        `Despacho #${res.id} ${isEdit ? 'atualizado' : 'gravado'} com sucesso no banco de dados.`
+      );
       setSuccessModal({
         isOpen: true,
-        title: 'Registro Salvo no Banco de Dados!',
+        title: isEdit ? 'Registro Atualizado no Banco de Dados!' : 'Registro Salvo no Banco de Dados!',
         message: isEdit
-          ? `As modificações da viatura ${principal.viatura || ''} (Registro #${res.id}) foram salvas com sucesso no banco de dados!`
-          : `O despacho da viatura ${principal.viatura || ''} (Registro #${res.id}) foi gravado com sucesso no banco de dados!`
+          ? `As modificações da viatura ${principal.viatura || ''} (Registro #${res.id}) foram atualizadas com sucesso no banco de dados central e na nuvem!`
+          : `O despacho da viatura ${principal.viatura || ''} (Registro #${res.id}) foi gravado com sucesso no banco de dados central e na nuvem!`
       });
     }
   };
@@ -772,13 +803,20 @@ export default function App() {
   };
 
   // Delete Record Handling
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (recordToDeleteId === null) return;
-    const updated = storageService.excluirRegistro(recordToDeleteId);
+    const idExcluido = recordToDeleteId;
+    const updated = await storageService.excluirRegistro(idExcluido);
     setRegistros([...updated]);
+    setViaturas([...storageService.getViaturas()]);
     setIsDeleteConfirmOpen(false);
     setRecordToDeleteId(null);
-    showToast('Registro Excluído', `Registro #${recordToDeleteId} removido do banco de dados.`);
+    showToast('Registro Excluído!', `Registro #${idExcluido} excluído com sucesso do banco de dados.`);
+    setSuccessModal({
+      isOpen: true,
+      title: 'Registro Excluído do Banco de Dados!',
+      message: `O Registro #${idExcluido} foi excluído permanentemente do banco de dados (local, servidor central e Supabase) com sucesso!`
+    });
   };
 
   if (!operador) {
@@ -838,10 +876,7 @@ export default function App() {
         militares={militares}
         bairros={bairros}
         viaturaPredefinida={viaturaAlvoMobile}
-        onRefreshData={() => {
-          setRegistros([...storageService.getRegistros()]);
-          setViaturas([...storageService.getViaturas()]);
-        }}
+        onRefreshData={carregarDadosCentrais}
         onLogout={handleLogout}
         onSwitchToDesktop={() => {
           setModoAmbiente('desktop');

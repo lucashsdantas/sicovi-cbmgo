@@ -210,6 +210,42 @@ export const MobileHub: React.FC<MobileHubProps> = ({
     setModalSaidaOpen(true);
   };
 
+  // Sincronização periódica contínua em tempo real (a cada 3.5s e ao focar a tela no celular)
+  useEffect(() => {
+    let cancelado = false;
+    const sincronizarComServidor = async () => {
+      try {
+        await storageService.carregarDoBancoCentral();
+        if (!cancelado) {
+          onRefreshData();
+        }
+      } catch (e) {
+        console.warn('Erro ao sincronizar dados centralmente no mobile:', e);
+      }
+    };
+
+    const timer = setInterval(sincronizarComServidor, 3500);
+
+    const handleVisChange = () => {
+      if (document.visibilityState === 'visible') {
+        sincronizarComServidor();
+      }
+    };
+    const handleFocus = () => {
+      sincronizarComServidor();
+    };
+
+    document.addEventListener('visibilitychange', handleVisChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      cancelado = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [onRefreshData]);
+
   // Se o militar acessou via QR Code da viatura, seleciona e abre automaticamente
   const jaSelecionouPredefinida = useRef(false);
   useEffect(() => {
@@ -288,8 +324,8 @@ export const MobileHub: React.FC<MobileHubProps> = ({
     setFeedbackModal({
       isOpen: true,
       tipo: 'saida',
-      titulo: 'Deslocamento Registrado!',
-      mensagem: `Viatura ${vtrSelecionadaParaSaida.prefixo} despachada (#${res.id}) com destino a ${destinoSelecionado}.`,
+      titulo: 'Deslocamento Salvo no Banco de Dados!',
+      mensagem: `Viatura ${vtrSelecionadaParaSaida.prefixo} despachada (Registro #${res.id}) com destino a ${destinoSelecionado}. Gravado e sincronizado no banco de dados com sucesso!`,
       viaturaPrefixo: vtrSelecionadaParaSaida.prefixo,
       idRegistro: res.id
     });
@@ -333,8 +369,8 @@ export const MobileHub: React.FC<MobileHubProps> = ({
     setFeedbackModal({
       isOpen: true,
       tipo: 'chegada',
-      titulo: 'Retorno Registrado!',
-      mensagem: `Viatura ${vtrChegada.prefixo} liberada e disponível (${kc - ks} km percorridos).`,
+      titulo: 'Retorno Salvo no Banco de Dados!',
+      mensagem: `Viatura ${vtrChegada.prefixo} liberada e disponível (${kc - ks} km percorridos). Registro #${res.id} atualizado no banco de dados com sucesso!`,
       viaturaPrefixo: vtrChegada.prefixo,
       idRegistro: res.id
     });
