@@ -130,15 +130,22 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
       const res = await storageService.salvarMilitaresComAntiguidadeAsync(ordemMilitaresRascunho);
       onMilitaresChange(ordemMilitaresRascunho);
       setTemAlteracoesAntiguidade(false);
-      setMsgAntiguidade('Ordem de antiguidade salva com sucesso!');
-      soundEffects.playSuccess();
-      setTimeout(() => setMsgAntiguidade(''), 4000);
+      setMsgAntiguidade(res.colunaAntiguidadeExiste ? 'Ordem de antiguidade salva com sucesso!' : 'Salvo localmente. Execute a migração no Supabase!');
+      if (res.colunaAntiguidadeExiste) {
+        soundEffects.playSuccess();
+      } else {
+        soundEffects.playClick();
+      }
+      setTimeout(() => setMsgAntiguidade(''), 5000);
       setAlertModal({
         isOpen: true,
-        title: 'Antiguidade Salva no Banco Online',
+        title: res.colunaAntiguidadeExiste ? 'Antiguidade Salva no Banco Online' : 'Atenção: Migração no Supabase Pendente',
         message: res.mensagem,
-        type: 'success'
+        type: res.colunaAntiguidadeExiste ? 'success' : 'warning'
       });
+      if (!res.colunaAntiguidadeExiste) {
+        setColunaAntiguidadeStatus({ checked: true, existe: false, checando: false });
+      }
     } catch (err: any) {
       setAlertModal({
         isOpen: true,
@@ -225,6 +232,44 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
     msg: isSupabaseConfigured() ? 'Credenciais configuradas' : 'Supabase não conectado'
   });
   const [copiadoSql, setCopiadoSql] = useState(false);
+  const [copiadoSqlMigracao, setCopiadoSqlMigracao] = useState(false);
+  const [colunaAntiguidadeStatus, setColunaAntiguidadeStatus] = useState<{
+    checked: boolean;
+    existe: boolean;
+    checando: boolean;
+    mensagem?: string;
+  }>({
+    checked: false,
+    existe: true,
+    checando: false
+  });
+
+  const checarColunaAntiguidade = async () => {
+    setColunaAntiguidadeStatus(prev => ({ ...prev, checando: true }));
+    const res = await storageService.verificarColunaAntiguidadeSupabase();
+    setColunaAntiguidadeStatus({
+      checked: true,
+      existe: res.existe,
+      checando: false,
+      mensagem: res.mensagem
+    });
+  };
+
+  useEffect(() => {
+    if (isOpen && (activeTab === 'militares' || activeTab === 'supabase' || activeTab === 'planilhas')) {
+      checarColunaAntiguidade();
+    }
+  }, [isOpen, activeTab]);
+
+  const handleCopiarSqlMigracao = () => {
+    const sql = `-- EXECUTE ESTE COMANDO NO SQL EDITOR DO SUPABASE PARA ADICIONAR A COLUNA ANTIGUIDADE:
+ALTER TABLE IF EXISTS public.militares ADD COLUMN IF NOT EXISTS antiguidade INTEGER DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_militares_antiguidade ON public.militares(antiguidade ASC);`;
+    navigator.clipboard.writeText(sql);
+    setCopiadoSqlMigracao(true);
+    soundEffects.playClick();
+    setTimeout(() => setCopiadoSqlMigracao(false), 3000);
+  };
 
   // Lista combinada de militares e operadores respeitando estritamente a antiguidade cadastrada
   const listaMilitarParaSenha = useMemo(() => {
@@ -798,25 +843,66 @@ export const ManagerialModal: React.FC<ManagerialModalProps> = ({
   };
 
   const handleCopiarSql = () => {
-    const sqlScript = `-- SICOVI - Schema Supabase
+    const sqlScript = `-- ============================================================================
+-- SICOVI - SISTEMA DE CONTROLE DE VIATURAS (CBMGO)
+-- Script Completo de Criação e Migração do Banco de Dados no Supabase (PostgreSQL)
+-- ============================================================================
+
+-- 1. MIGRAÇÃO RÁPIDA: CASO A TABELA MILITARES JÁ EXISTA, ADICIONA A COLUNA ANTIGUIDADE
+ALTER TABLE IF EXISTS public.militares ADD COLUMN IF NOT EXISTS antiguidade INTEGER DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_militares_antiguidade ON public.militares(antiguidade ASC);
+
+-- 2. HABILITAR UUID
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 3. TABELA DE VIATURAS
 CREATE TABLE IF NOT EXISTS public.viaturas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     prefixo VARCHAR(50) UNIQUE NOT NULL,
     categoria VARCHAR(50) NOT NULL DEFAULT 'GERAL',
     status VARCHAR(50) NOT NULL DEFAULT 'DISPONÍVEL',
+    km_atual NUMERIC DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- 4. TABELA DE MILITARES COM ANTIGUIDADE
 CREATE TABLE IF NOT EXISTS public.militares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome VARCHAR(100) UNIQUE NOT NULL,
+    antiguidade INTEGER DEFAULT 0,
+    ativo BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_militares_antiguidade ON public.militares(antiguidade ASC);
+
+-- 5. TABELA DE OPERADORES COM HASH DE SENHA
 CREATE TABLE IF NOT EXISTS public.operadores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     usuario VARCHAR(100) UNIQUE NOT NULL,
     senha_hash VARCHAR(255) NOT NULL,
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 6. TABELA DE BAIRROS
+CREATE TABLE IF NOT EXISTS public.bairros (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(100) UNIQUE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- 7. TABELA DE ESCALAS DE SERVIÇO
+CREATE TABLE IF NOT EXISTS public.escalas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    viatura VARCHAR(50) UNIQUE NOT NULL,
+    condutor VARCHAR(100) NOT NULL,
+    equipe TEXT DEFAULT '',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 8. TABELA DE REGISTROS DE DESLOCAMENTO
 CREATE TABLE IF NOT EXISTS public.registros (
     id BIGSERIAL PRIMARY KEY,
     viatura VARCHAR(50) NOT NULL,
@@ -827,23 +913,40 @@ CREATE TABLE IF NOT EXISTS public.registros (
     rai VARCHAR(50),
     natureza VARCHAR(150),
     saida TIMESTAMP WITH TIME ZONE NOT NULL,
-    km_saida INTEGER NOT NULL,
+    km_saida NUMERIC NOT NULL,
     chegada TIMESTAMP WITH TIME ZONE,
-    km_chegada INTEGER,
+    km_chegada NUMERIC,
     operador VARCHAR(100) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_registros_viatura ON public.registros(viatura);
+CREATE INDEX IF NOT EXISTS idx_registros_saida ON public.registros(saida DESC);
+
+-- POLÍTICAS DE ACESSO (RLS)
 ALTER TABLE public.viaturas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.militares ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.operadores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bairros ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.escalas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.registros ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Acesso Total Viaturas" ON public.viaturas;
+DROP POLICY IF EXISTS "Acesso Total Militares" ON public.militares;
+DROP POLICY IF EXISTS "Acesso Total Operadores" ON public.operadores;
+DROP POLICY IF EXISTS "Acesso Total Bairros" ON public.bairros;
+DROP POLICY IF EXISTS "Acesso Total Escalas" ON public.escalas;
+DROP POLICY IF EXISTS "Acesso Total Registros" ON public.registros;
+
 CREATE POLICY "Acesso Total Viaturas" ON public.viaturas FOR ALL USING (true);
 CREATE POLICY "Acesso Total Militares" ON public.militares FOR ALL USING (true);
 CREATE POLICY "Acesso Total Operadores" ON public.operadores FOR ALL USING (true);
+CREATE POLICY "Acesso Total Bairros" ON public.bairros FOR ALL USING (true);
+CREATE POLICY "Acesso Total Escalas" ON public.escalas FOR ALL USING (true);
 CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
 `;
     navigator.clipboard.writeText(sqlScript);
     setCopiadoSql(true);
+    soundEffects.playClick();
     setTimeout(() => setCopiadoSql(false), 2500);
   };
 
@@ -1174,6 +1277,44 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                       </button>
                     </form>
                   </div>
+
+                  {/* Alerta de Coluna Antiguidade Ausente no Supabase */}
+                  {colunaAntiguidadeStatus.checked && !colunaAntiguidadeStatus.existe && (
+                    <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-amber-950 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-amber-200/60 text-amber-900 rounded-xl shrink-0 mt-0.5">
+                          <AlertTriangle className="w-5 h-5 text-amber-700" />
+                        </div>
+                        <div>
+                          <h5 className="text-xs font-black uppercase tracking-wide text-amber-900 flex items-center gap-2">
+                            <span>Atenção: A coluna "Antiguidade" ainda não existe no seu Supabase</span>
+                          </h5>
+                          <p className="text-[11px] text-amber-800 leading-relaxed mt-1 font-medium">
+                            Como a tabela <strong>public.militares</strong> já havia sido criada antes, o PostgreSQL exige a execução do comando de migração para adicionar a coluna <code>antiguidade</code>. Sem isso, outras máquinas e celulares não receberão a ordem correta.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
+                        <button
+                          type="button"
+                          onClick={handleCopiarSqlMigracao}
+                          className="flex-1 md:flex-none px-4 py-2.5 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                        >
+                          {copiadoSqlMigracao ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                          <span>{copiadoSqlMigracao ? 'Comando Copiado!' : 'Copiar Comando de Migração'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={checarColunaAntiguidade}
+                          disabled={colunaAntiguidadeStatus.checando}
+                          className="px-3 py-2.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                          title="Verificar novamente se a coluna foi criada"
+                        >
+                          {colunaAntiguidadeStatus.checando ? '...' : 'Verificar'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Quadro Geral de Antiguidade dos Militares */}
                   <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
@@ -1935,6 +2076,43 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
               {/* ABA 5: SUPABASE */}
               {activeTab === 'supabase' && (
                 <div className="space-y-6">
+                  {/* Alerta de Coluna Antiguidade Ausente */}
+                  {colunaAntiguidadeStatus.checked && !colunaAntiguidadeStatus.existe && (
+                    <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-amber-950 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-amber-200/60 text-amber-900 rounded-xl shrink-0 mt-0.5">
+                          <AlertTriangle className="w-5 h-5 text-amber-700" />
+                        </div>
+                        <div>
+                          <h5 className="text-xs font-black uppercase tracking-wide text-amber-900">
+                            Atenção: A coluna "Antiguidade" não existe na tabela militares do Supabase
+                          </h5>
+                          <p className="text-[11px] text-amber-800 leading-relaxed mt-1 font-medium">
+                            Execute o comando de migração no SQL Editor do Supabase para que a ordem de antiguidade seja armazenada e disponibilizada em todas as outras máquinas e celulares.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
+                        <button
+                          type="button"
+                          onClick={handleCopiarSqlMigracao}
+                          className="flex-1 md:flex-none px-4 py-2 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                        >
+                          {copiadoSqlMigracao ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                          <span>{copiadoSqlMigracao ? 'Comando Copiado!' : 'Copiar Migração'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={checarColunaAntiguidade}
+                          disabled={colunaAntiguidadeStatus.checando}
+                          className="px-3 py-2 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          {colunaAntiguidadeStatus.checando ? '...' : 'Verificar'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Status Banner */}
                   <div className={`p-4 rounded-xl border flex items-center justify-between ${
                     statusConexao.ok
@@ -2018,54 +2196,45 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
 
                   {/* Script SQL */}
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <h4 className="text-xs font-bold text-slate-800 uppercase">
-                        Script SQL para Criação das Tabelas
+                        Script SQL para Criação e Migração das Tabelas
                       </h4>
-                      <button
-                        onClick={handleCopiarSql}
-                        className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
-                      >
-                        {copiadoSql ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiadoSql ? 'Copiado!' : 'Copiar Script SQL'}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleCopiarSqlMigracao}
+                          className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-xs font-bold cursor-pointer"
+                          title="Copiar apenas o comando ALTER TABLE para adicionar a coluna antiguidade"
+                        >
+                          {copiadoSqlMigracao ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiadoSqlMigracao ? 'Copiado!' : 'Copiar Migração (ALTER TABLE)'}</span>
+                        </button>
+                        <button
+                          onClick={handleCopiarSql}
+                          className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          {copiadoSql ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiadoSql ? 'Copiado!' : 'Copiar Script SQL Completo'}</span>
+                        </button>
+                      </div>
                     </div>
                     <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-[11px] font-mono overflow-x-auto max-h-48 border border-slate-800">
-                      <code>{`-- SICOVI - Schema Supabase
-CREATE TABLE IF NOT EXISTS public.viaturas (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    prefixo VARCHAR(50) UNIQUE NOT NULL,
-    categoria VARCHAR(50) NOT NULL DEFAULT 'GERAL',
-    status VARCHAR(50) NOT NULL DEFAULT 'DISPONÍVEL',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+                      <code>{`-- 1. MIGRAÇÃO: ADICIONA A COLUNA ANTIGUIDADE CASO A TABELA MILITARES JÁ EXISTA
+ALTER TABLE IF EXISTS public.militares ADD COLUMN IF NOT EXISTS antiguidade INTEGER DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_militares_antiguidade ON public.militares(antiguidade ASC);
+
+-- 2. TABELA DE MILITARES COM ANTIGUIDADE
 CREATE TABLE IF NOT EXISTS public.militares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome VARCHAR(100) UNIQUE NOT NULL,
+    antiguidade INTEGER DEFAULT 0,
+    ativo BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE TABLE IF NOT EXISTS public.operadores (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    usuario VARCHAR(100) UNIQUE NOT NULL,
-    senha_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.registros (
-    id BIGSERIAL PRIMARY KEY,
-    viatura VARCHAR(50) NOT NULL,
-    condutor VARCHAR(100) NOT NULL,
-    equipe TEXT,
-    destino VARCHAR(150) NOT NULL,
-    bairro VARCHAR(100),
-    rai VARCHAR(50),
-    natureza VARCHAR(150),
-    saida TIMESTAMP WITH TIME ZONE NOT NULL,
-    km_saida INTEGER NOT NULL,
-    chegada TIMESTAMP WITH TIME ZONE,
-    km_chegada INTEGER,
-    operador VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);`}</code>
+CREATE INDEX IF NOT EXISTS idx_militares_antiguidade ON public.militares(antiguidade ASC);
+
+-- 3. DEMAIS TABELAS: VIATURAS, OPERADORES, ESCALAS, BAIRROS E REGISTROS
+-- (Clique em 'Copiar Script SQL Completo' para o script na íntegra)`}</code>
                     </pre>
                   </div>
                 </div>

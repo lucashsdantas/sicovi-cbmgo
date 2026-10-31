@@ -438,17 +438,26 @@ export const storageService = {
   },
 
   setMilitares(militares: string[]): void {
-    localStorage.setItem(STORAGE_KEY_MILITARES, JSON.stringify(militares));
-    syncComServidorCentral({ militares });
+    const limpos = limparListaMilitaresValidos(militares);
+    localStorage.setItem(STORAGE_KEY_MILITARES, JSON.stringify(limpos));
+    syncComServidorCentral({ militares: limpos });
 
     // Persiste ordem de antiguidade no Supabase
     const sb = getSupabase();
-    if (sb && militares.length > 0) {
-      const payload = militares.map((nome, idx) => ({
+    if (sb && limpos.length > 0) {
+      const payload = limpos.map((nome, idx) => ({
         nome,
-        antiguidade: idx + 1
+        antiguidade: idx + 1,
+        ativo: true
       }));
-      Promise.resolve(sb.from('militares').upsert(payload, { onConflict: 'nome' })).catch(() => {});
+      Promise.resolve(sb.from('militares').upsert(payload, { onConflict: 'nome' }))
+        .then(({ error }: any) => {
+          if (error) {
+            console.warn('Erro ao salvar antiguidade no Supabase (coluna pode estar ausente):', error.message);
+            Promise.resolve(sb.from('militares').upsert(limpos.map(nome => ({ nome })), { onConflict: 'nome' })).catch(() => {});
+          }
+        })
+        .catch(() => {});
     }
   },
 
@@ -1617,16 +1626,38 @@ export const storageService = {
     };
   },
 
+  async verificarColunaAntiguidadeSupabase(): Promise<{ existe: boolean; mensagem?: string }> {
+    const sb = getSupabase();
+    if (!sb) return { existe: false, mensagem: 'Supabase não conectado.' };
+    try {
+      const { error } = await sb.from('militares').select('antiguidade').limit(1);
+      if (error) {
+        return {
+          existe: false,
+          mensagem: error.message || 'Coluna antiguidade não encontrada na tabela militares.'
+        };
+      }
+      return { existe: true };
+    } catch (err: any) {
+      return { existe: false, mensagem: err?.message || String(err) };
+    }
+  },
+
   async salvarMilitaresComAntiguidadeAsync(listaOrdenada: string[]): Promise<{
     success: boolean;
     total: number;
+    colunaAntiguidadeExiste: boolean;
     mensagem: string;
+    erroSupabase?: string;
   }> {
     const limpos = limparListaMilitaresValidos(listaOrdenada);
     this.setMilitares(limpos);
     await syncComServidorCentral({ militares: limpos });
 
     let salvoNoSupabase = false;
+    let colunaAntiguidadeExiste = true;
+    let erroSupabase: string | undefined;
+
     const sb = getSupabase();
     if (sb && limpos.length > 0) {
       try {
@@ -1635,19 +1666,46 @@ export const storageService = {
           antiguidade: idx + 1,
           ativo: true
         }));
+        let erroEncontrado = false;
         for (let i = 0; i < payload.length; i += 50) {
-          await sb.from('militares').upsert(payload.slice(i, i + 50), { onConflict: 'nome' });
+          const { error } = await sb.from('militares').upsert(payload.slice(i, i + 50), { onConflict: 'nome' });
+          if (error) {
+            console.warn('Erro ao atualizar antiguidade no Supabase:', error.message);
+            erroEncontrado = true;
+            erroSupabase = error.message;
+            if (error.message.includes('antiguidade') || error.code === '42703' || error.message.includes('column')) {
+              colunaAntiguidadeExiste = false;
+            }
+          }
         }
-        salvoNoSupabase = true;
+
+        if (!erroEncontrado) {
+          salvoNoSupabase = true;
+        } else if (!colunaAntiguidadeExiste) {
+          // Salva os nomes mesmo que a coluna antiguidade não exista no momento
+          for (let i = 0; i < limpos.length; i += 50) {
+            await sb.from('militares').upsert(limpos.slice(i, i + 50).map(nome => ({ nome })), { onConflict: 'nome' });
+          }
+        }
       } catch (err: any) {
         console.warn('Erro ao atualizar antiguidade no Supabase:', err);
+        erroSupabase = err?.message || String(err);
       }
+    }
+
+    let mensagem = `Ordem de antiguidade de ${limpos.length} militares salva com sucesso!`;
+    if (salvoNoSupabase) {
+      mensagem += ' Sincronizada com o Supabase Cloud e servidor central.';
+    } else if (!colunaAntiguidadeExiste) {
+      mensagem += ' ATENÇÃO: A coluna "antiguidade" ainda não foi criada no Supabase. Execute o comando SQL indicado para que outras máquinas recebam a antiguidade.';
     }
 
     return {
       success: true,
       total: limpos.length,
-      mensagem: `Ordem de antiguidade de ${limpos.length} militares salva com sucesso${salvoNoSupabase ? ' e sincronizada no Supabase Cloud' : ''}!`
+      colunaAntiguidadeExiste,
+      mensagem,
+      erroSupabase
     };
   },
 
@@ -1920,12 +1978,20 @@ export const storageService = {
         }
       }
 
-      // 2. Militares
+      // 2. Militares (com antiguidade preservada)
       const mils = this.getMilitares();
       if (mils.length > 0) {
-        const mPayload = mils.map(nome => ({ nome }));
+        const mPayload = mils.map((nome, idx) => ({
+          nome,
+          antiguidade: idx + 1,
+          ativo: true
+        }));
         for (let i = 0; i < mPayload.length; i += 50) {
-          await sb.from('militares').upsert(mPayload.slice(i, i + 50), { onConflict: 'nome' });
+          const { error } = await sb.from('militares').upsert(mPayload.slice(i, i + 50), { onConflict: 'nome' });
+          if (error) {
+            // Se a coluna antiguidade não existir, salva ao menos os nomes
+            await sb.from('militares').upsert(mils.slice(i, i + 50).map(nome => ({ nome })), { onConflict: 'nome' });
+          }
         }
       }
 
@@ -2081,23 +2147,48 @@ export const storageService = {
         this.setViaturas(vtrsFormatadas);
       }
 
-      // 2. Militares (ordenados estritamente pela antiguidade pré-definida)
+      // 2. Militares (ordenados estritamente pela antiguidade pré-definida na nuvem)
       try {
-        const { data: mils, error: errMils } = await sb.from('militares').select('nome, antiguidade').order('antiguidade', { ascending: true });
+        const { data: mils, error: errMils } = await sb
+          .from('militares')
+          .select('nome, antiguidade')
+          .order('antiguidade', { ascending: true });
+
         if (!errMils && mils && mils.length > 0) {
-          const listaMils = mils.map((m: any) => m.nome).filter(Boolean);
-          this.setMilitares(listaMils);
-        } else {
-          const { data: milsFallback } = await sb.from('militares').select('nome').order('created_at', { ascending: true });
-          if (milsFallback && milsFallback.length > 0) {
-            this.setMilitares(milsFallback.map((m: any) => m.nome).filter(Boolean));
+          const temAntiguidade = mils.some(
+            (m: any) => m.antiguidade !== null && m.antiguidade !== undefined && Number(m.antiguidade) > 0
+          );
+          if (temAntiguidade) {
+            const listaOrdenada = mils
+              .filter((m: any) => m.nome && String(m.nome).trim().length > 1)
+              .sort((a: any, b: any) => {
+                const numA = (a.antiguidade !== null && a.antiguidade !== undefined && !isNaN(Number(a.antiguidade))) ? Number(a.antiguidade) : 999999;
+                const numB = (b.antiguidade !== null && b.antiguidade !== undefined && !isNaN(Number(b.antiguidade))) ? Number(b.antiguidade) : 999999;
+                return numA - numB;
+              })
+              .map((m: any) => String(m.nome).trim());
+
+            const limpos = limparListaMilitaresValidos(listaOrdenada);
+            if (limpos.length > 0) {
+              localStorage.setItem(STORAGE_KEY_MILITARES, JSON.stringify(limpos));
+              syncComServidorCentral({ militares: limpos });
+            }
+          }
+        } else if (errMils) {
+          console.warn('Coluna antiguidade ausente ou erro ao ler militares do Supabase:', errMils.message);
+          // Se a lista local estiver completamente vazia, carrega nomes básicos
+          if (this.getMilitares().length === 0) {
+            const { data: milsFallback } = await sb.from('militares').select('nome').order('created_at', { ascending: true });
+            if (milsFallback && milsFallback.length > 0) {
+              const limpos = limparListaMilitaresValidos(milsFallback.map((m: any) => m.nome));
+              if (limpos.length > 0) {
+                this.setMilitares(limpos);
+              }
+            }
           }
         }
-      } catch {
-        const { data: mils } = await sb.from('militares').select('nome');
-        if (mils && mils.length > 0) {
-          this.setMilitares(mils.map((m: any) => m.nome).filter(Boolean));
-        }
+      } catch (errMilitar) {
+        console.warn('Erro ao sincronizar militares com antiguidade do Supabase:', errMilitar);
       }
 
       // 3. Operadores

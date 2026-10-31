@@ -3,11 +3,15 @@
 -- Script de Migração e Criação de Banco de Dados para o Supabase (PostgreSQL)
 -- ============================================================================
 -- Como usar:
--- 1. Crie um projeto gratuito no Supabase (https://supabase.com)
--- 2. No menu lateral, acerte no ícone "SQL Editor" -> "New Query"
--- 3. Cole todo este código e clique em "RUN" (ou CTRL + ENTER)
--- 4. Suas tabelas, índices e dados iniciais serão criados em segundos!
+-- 1. Acesse o seu projeto no Supabase (https://supabase.com)
+-- 2. No menu lateral, clique em "SQL Editor" -> "New Query"
+-- 3. Cole todo este código e clique em "RUN" (ou pressione CTRL + ENTER)
+-- 4. Se sua tabela militares já existia, a coluna 'antiguidade' será adicionada automaticamente!
 -- ============================================================================
+
+-- MIGRAÇÃO RÁPIDA: Adiciona a coluna antiguidade caso a tabela militares já exista
+ALTER TABLE IF EXISTS public.militares ADD COLUMN IF NOT EXISTS antiguidade INTEGER DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_militares_antiguidade ON public.militares(antiguidade ASC);
 
 -- Habilitar extensão para geração de UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
