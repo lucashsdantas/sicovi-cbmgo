@@ -256,19 +256,16 @@ export const MobileHub: React.FC<MobileHubProps> = ({
 
     setErroModal(null);
 
-    // Garante que o ID atribuído obedeça à sequência global (maior da nuvem/servidor + 1)
-    let proximoIdAutoritativo: number;
+    // Sincroniza com o servidor central antes de gerar o ID para garantir o último ID somado com 1
     try {
-      proximoIdAutoritativo = await storageService.obterMaiorIdNuvemAsync();
-    } catch {
-      proximoIdAutoritativo = storageService.getProximoId();
-    }
+      await storageService.carregarDoBancoCentral();
+    } catch {}
 
     // Fuso horário oficial de Brasília (UTC-3), idêntico ao desktop
     const dataHoraSaidaFmt = formatarDataHoraPtBr(getAgoraBrasilia(), true);
 
     const payload: Partial<RegistroDespacho> = {
-      id: proximoIdAutoritativo,
+      id: 'PENDENTE', // Exatamente como no desktop: atribui o último ID existente somado com 1
       viatura: vtrSelecionadaParaSaida.prefixo.toUpperCase().trim(),
       condutor: condutor.trim(),
       operador: condutor.trim(), // Regra: condutor e operador têm mesmo valor no mobile

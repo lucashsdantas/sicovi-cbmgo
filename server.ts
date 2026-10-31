@@ -70,7 +70,7 @@ function readDb(): ServerDatabase {
           if (!isNaN(num) && num > maxId) maxId = num;
         });
       }
-      const prox = Math.max(Number(parsed.proximoId) || 1, maxId + 1);
+      const prox = maxId > 0 ? maxId + 1 : (Number(parsed.proximoId) || 1);
       return { ...initialDb, ...parsed, proximoId: prox };
     }
   } catch (err) {
@@ -106,7 +106,7 @@ function writeDb(data: Partial<ServerDatabase> & { modo?: 'adicionar' | 'substit
     });
   }
 
-  const prox = Math.max(Number(data.proximoId) || Number(current.proximoId) || 1, maxId + 1);
+  const prox = maxId > 0 ? maxId + 1 : (Number(data.proximoId) || Number(current.proximoId) || 1);
   const updated: ServerDatabase = {
     ...current,
     ...data,
@@ -138,7 +138,7 @@ app.get('/api/db/proximo-id', (_req, res) => {
         if (!isNaN(num) && num > maxId) maxId = num;
       });
     }
-    const nextId = Math.max(Number(current.proximoId) || 1, maxId + 1);
+    const nextId = maxId > 0 ? maxId + 1 : (Number(current.proximoId) || 1);
     res.json({ success: true, proximoId: nextId, maiorId: maxId });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
