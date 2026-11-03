@@ -24,9 +24,13 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   const [mostrarSenhas, setMostrarSenhas] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const safeOperadores: string[] = Array.isArray(operadores)
+    ? operadores
+    : (operadores && typeof operadores === 'object' ? (Object.values(operadores) as string[]) : []);
+
   useEffect(() => {
     if (isOpen) {
-      setUsuario(operadorPadrao || (operadores.length > 0 ? operadores[0] : ''));
+      setUsuario(operadorPadrao || (safeOperadores.length > 0 ? safeOperadores[0] : ''));
       setSenhaAtual('');
       setNovaSenha('');
       setConfirmarSenha('');
@@ -123,7 +127,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
               onChange={e => setUsuario(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-red-700"
             >
-              {operadores.map(op => (
+              {safeOperadores.map(op => (
                 <option key={op} value={op}>
                   {op}
                 </option>

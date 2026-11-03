@@ -226,7 +226,7 @@ export default function App() {
       setRegistros([...regs]);
       setViaturas([...vtrs]);
       setMilitares([...mils]);
-      setOperadores({ ...ops });
+      setOperadores(Array.isArray(ops) ? [...ops] : Object.values(ops || {}));
       setEscalas([...esc]);
       return { vtrs, mils, ops, regs, esc };
     } catch (e) {

@@ -268,16 +268,23 @@ CREATE INDEX IF NOT EXISTS idx_militares_antiguidade ON public.militares(antigui
   const listaMilitarParaSenha = useMemo(() => {
     const list: string[] = [];
     const seen = new Set<string>();
-    militares.forEach(m => {
-      const clean = (m || '').trim();
+    const safeMilitares: string[] = Array.isArray(militares)
+      ? militares
+      : (militares && typeof militares === 'object' ? (Object.values(militares) as string[]) : []);
+    const safeOperadores: string[] = Array.isArray(operadores)
+      ? operadores
+      : (operadores && typeof operadores === 'object' ? (Object.values(operadores) as string[]) : []);
+
+    safeMilitares.forEach(m => {
+      const clean = (typeof m === 'string' ? m : String(m || '')).trim();
       const k = clean.toLowerCase();
       if (clean && !seen.has(k)) {
         seen.add(k);
         list.push(clean);
       }
     });
-    operadores.forEach(o => {
-      const clean = (o || '').trim();
+    safeOperadores.forEach(o => {
+      const clean = (typeof o === 'string' ? o : String(o || '')).trim();
       const k = clean.toLowerCase();
       if (clean && !seen.has(k)) {
         seen.add(k);
