@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+@media print {
+  html, body {
+    background: #ffffff !important;
+  }
+}
