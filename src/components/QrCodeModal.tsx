@@ -249,7 +249,6 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
             <div class="texto-principal">ACESSO DIRETO À VIATURA</div>
             <div class="texto-sub">Aponte a câmera para registrar deslocamento</div>
           </div>
-          <div class="rodape-etiqueta">Fixar no painel interno da viatura</div>
         </div>
       `;
     }).join('');
@@ -327,13 +326,14 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
           }
           .card-etiqueta {
             border: 2px solid #0f172a;
-            border-radius: 8px;
+            border-radius: 12px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             align-items: center;
             text-align: center;
             background: #ffffff;
+            padding: 6px 6px 10px 6px;
             page-break-inside: avoid;
             break-inside: avoid;
           }
@@ -344,6 +344,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
           .header-etiqueta {
             width: 100%;
             padding: 4px 6px;
+            border-radius: 6px;
             color: #ffffff;
             display: flex;
             justify-content: space-between;
@@ -352,6 +353,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
             font-weight: 900;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            margin-bottom: 2px;
           }
           .bg-resgate { background-color: #dc2626 !important; }
           .bg-incendio { background-color: #ea580c !important; }
@@ -365,22 +367,22 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
           }
 
           .corpo-etiqueta {
-            padding: 6px 4px;
+            padding: 4px 4px 2px 4px;
             width: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
           }
           .prefixo-etiqueta {
-            font-size: 19px;
+            font-size: 20px;
             font-weight: 900;
             color: #0f172a;
             letter-spacing: -0.5px;
-            margin-bottom: 2px;
+            margin-bottom: 3px;
           }
           .qr-container {
-            width: 122px;
-            height: 122px;
+            width: 124px;
+            height: 124px;
             padding: 2px;
             background: #ffffff;
             border: 1px solid #cbd5e1;
@@ -406,17 +408,6 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
             color: #64748b;
             margin-top: 1px;
             line-height: 1.1;
-          }
-          .rodape-etiqueta {
-            width: 100%;
-            padding: 3px 4px;
-            background: #f1f5f9 !important;
-            border-top: 1px solid #e2e8f0;
-            font-size: 7px;
-            font-weight: 700;
-            color: #64748b;
-            text-align: center;
-            text-transform: uppercase;
           }
         </style>
       </head>
@@ -524,50 +515,43 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
         if (cat === 'RESGATE') { r = 220; g = 38; b = 38; }
         else if (cat === 'INCÊNDIO/SALVAMENTO') { r = 234; g = 88; b = 12; }
 
-        // Borda do card
+        // Borda e fundo arredondados contínuos do card (sem cortes)
+        doc.setFillColor(255, 255, 255);
         doc.setDrawColor(r, g, b);
-        doc.setLineWidth(0.7);
-        doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 2.5, 2.5);
+        doc.setLineWidth(0.8);
+        doc.roundedRect(cardX, cardY, cardWidth, cardHeight - 6, 3, 3, 'FD');
 
-        // Header da etiqueta
+        // Header interno arredondado (inset com 2mm de margem e cantos arredondados, sem vazar na borda do card)
         doc.setFillColor(r, g, b);
-        doc.rect(cardX, cardY, cardWidth, 6.5, 'F');
+        doc.roundedRect(cardX + 2, cardY + 2, cardWidth - 4, 6.5, 1.8, 1.8, 'F');
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(7);
         doc.setTextColor(255, 255, 255);
-        doc.text('CBMGO • SICOVI', cardX + 2.5, cardY + 4.5);
-        doc.text(cat, cardX + cardWidth - 2.5, cardY + 4.5, { align: 'right' });
+        doc.text('CBMGO • SICOVI', cardX + 4.5, cardY + 6.3);
+        doc.text(cat, cardX + cardWidth - 4.5, cardY + 6.3, { align: 'right' });
 
         // Prefixo da viatura
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
+        doc.setFontSize(14.5);
         doc.setTextColor(15, 23, 42);
-        doc.text(pref, cardX + cardWidth / 2, cardY + 13.5, { align: 'center' });
+        doc.text(pref, cardX + cardWidth / 2, cardY + 15.5, { align: 'center' });
 
         // Imagem do QR Code
         const qrDataUrl = qrCodesMap[pref];
         if (qrDataUrl) {
-          doc.addImage(qrDataUrl, 'PNG', cardX + (cardWidth - 43) / 2, cardY + 15, 43, 43);
+          doc.addImage(qrDataUrl, 'PNG', cardX + (cardWidth - 43) / 2, cardY + 17.5, 43, 43);
         }
 
         // Textos de instrução
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7);
+        doc.setFontSize(7.5);
         doc.setTextColor(30, 41, 59);
-        doc.text('ACESSO DIRETO À VIATURA', cardX + cardWidth / 2, cardY + 63.5, { align: 'center' });
+        doc.text('ACESSO DIRETO À VIATURA', cardX + cardWidth / 2, cardY + 66, { align: 'center' });
 
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(5.5);
         doc.setTextColor(100, 116, 139);
-        doc.text('Aponte a câmera para registrar deslocamento', cardX + cardWidth / 2, cardY + 67, { align: 'center' });
-
-        // Rodapé da etiqueta
-        doc.setFillColor(241, 245, 249);
-        doc.rect(cardX, cardY + cardHeight - 6, cardWidth, 6, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(5.5);
-        doc.setTextColor(100, 116, 139);
-        doc.text('Fixar no painel interno da viatura', cardX + cardWidth / 2, cardY + cardHeight - 2.2, { align: 'center' });
+        doc.text('Aponte a câmera para registrar deslocamento', cardX + cardWidth / 2, cardY + 69.5, { align: 'center' });
 
         countInPage++;
       }
@@ -966,20 +950,20 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
                       return (
                         <div
                           key={pref}
-                          className={`bg-white rounded-xl border-2 ${borderColor} overflow-hidden flex flex-col items-center text-center p-0 shadow-xs relative group`}
+                          className={`bg-white rounded-2xl border-2 ${borderColor} p-2 flex flex-col items-center text-center shadow-xs relative group`}
                         >
                           {/* Botão de remoção rápida da folha */}
                           <button
                             type="button"
                             onClick={() => toggleSelecionada(pref)}
-                            className="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-slate-900/80 text-white hover:bg-rose-600 flex items-center justify-center text-[10px] transition-colors cursor-pointer"
+                            className="absolute top-2 right-2 z-10 w-5 h-5 rounded-full bg-slate-900/80 text-white hover:bg-rose-600 flex items-center justify-center text-[10px] transition-colors cursor-pointer"
                             title="Remover esta viatura da impressão"
                           >
                             &times;
                           </button>
 
-                          {/* Header Etiqueta */}
-                          <div className={`w-full py-1.5 px-2 ${headerBg} text-white flex items-center justify-between`}>
+                          {/* Header Etiqueta Inset com cantos arredondados */}
+                          <div className={`w-full py-1 px-2.5 ${headerBg} text-white rounded-lg flex items-center justify-between mb-1.5`}>
                             <span className="text-[10px] font-black uppercase tracking-wider">
                               CBMGO • SICOVI
                             </span>
@@ -988,7 +972,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
                             </span>
                           </div>
 
-                          <div className="p-3 w-full flex flex-col items-center">
+                          <div className="w-full flex flex-col items-center pb-2">
                             {/* Prefixo Gigante */}
                             <div className="text-2xl font-black text-slate-900 tracking-tight my-1">
                               {pref}
@@ -1013,10 +997,6 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
                             <div className="text-[8px] text-slate-500 leading-tight">
                               Aponte a câmera do celular para registrar saída ou retorno
                             </div>
-                          </div>
-
-                          <div className="w-full py-1 bg-slate-100 border-t border-slate-200 text-[8px] text-slate-500 font-medium">
-                            Fixar no painel interno da viatura
                           </div>
                         </div>
                       );
