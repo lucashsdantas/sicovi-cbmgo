@@ -424,6 +424,76 @@ export const storageService = {
     syncComServidorCentral({ viaturas });
   },
 
+  /**
+   * Recalcula o status de TODAS as viaturas da frota considerando estritamente o registro de MAIOR ID de cada uma.
+   * Regra do usuário:
+   * "Cada edição de dados ou atualização automática, o sistema deve sempre considerar o maior id de registro daquela viatura para definir o status (empenhada, disponível). Pois se eu excluir uma saída por exemplo, o sistema precisa entender que a viatura agora está disponível."
+   */
+  recalcularStatusTodasViaturas(registrosRef?: RegistroDespacho[]): ViaturaItem[] {
+    const viaturas = this.getViaturas();
+    const registros = registrosRef || this.getRegistros();
+
+    // Mapeia o registro de MAIOR ID para cada viatura
+    const maiorRegistroPorViatura = new Map<string, RegistroDespacho>();
+
+    registros.forEach(r => {
+      if (!r.viatura) return;
+      const pref = r.viatura.trim().toUpperCase();
+      const numId = Number(r.id);
+      const safeId = !isNaN(numId) ? numId : 0;
+
+      const atual = maiorRegistroPorViatura.get(pref);
+      if (!atual) {
+        maiorRegistroPorViatura.set(pref, r);
+      } else {
+        const numIdAtual = Number(atual.id);
+        const safeIdAtual = !isNaN(numIdAtual) ? numIdAtual : 0;
+        if (safeId > safeIdAtual) {
+          maiorRegistroPorViatura.set(pref, r);
+        }
+      }
+    });
+
+    let houveModificacao = false;
+    const viaturasAtualizadas: ViaturaItem[] = viaturas.map(v => {
+      const pref = v.prefixo.trim().toUpperCase();
+      const ultimoReg = maiorRegistroPorViatura.get(pref);
+
+      let novoStatus = 'DISPONÍVEL';
+      if (ultimoReg) {
+        const temChegada = Boolean(
+          ultimoReg.chegada &&
+          String(ultimoReg.chegada).trim() !== '' &&
+          String(ultimoReg.chegada).trim().toUpperCase() !== 'EM ABERTO' &&
+          String(ultimoReg.chegada).trim().toUpperCase() !== 'NULL' &&
+          String(ultimoReg.chegada).trim() !== '-' &&
+          String(ultimoReg.chegada).trim() !== '---'
+        );
+        novoStatus = temChegada ? 'DISPONÍVEL' : 'EMPENHADA';
+      }
+
+      if (v.status !== novoStatus) {
+        houveModificacao = true;
+        return { ...v, status: novoStatus };
+      }
+      return v;
+    });
+
+    if (houveModificacao) {
+      localStorage.setItem(STORAGE_KEY_VIATURAS, JSON.stringify(viaturasAtualizadas));
+      syncComServidorCentral({ viaturas: viaturasAtualizadas });
+
+      const sb = getSupabase();
+      if (sb) {
+        viaturasAtualizadas.forEach(v => {
+          sb.from('viaturas').update({ status: v.status }).eq('prefixo', v.prefixo).then();
+        });
+      }
+    }
+
+    return viaturasAtualizadas;
+  },
+
   getMilitares(): string[] {
     const raw = localStorage.getItem(STORAGE_KEY_MILITARES);
     if (!raw) {
@@ -856,7 +926,7 @@ export const storageService = {
     return null;
   },
 
-  salvarRegistro(r: Partial<RegistroDespacho>): { id: number | string; registros: RegistroDespacho[]; novoStatus: string } {
+  salvarRegistro(r: Partial<RegistroDespacho>): { id: number | string; registros: RegistroDespacho[]; viaturas: ViaturaItem[]; novoStatus: string } {
     const atuais = this.getRegistros();
     let idNum: number | string = r.id || 'PENDENTE';
 
@@ -905,19 +975,15 @@ export const storageService = {
       this.salvarNaturezaNoHistorico(novoItem.natureza);
     }
 
-    // Atualiza status da viatura
-    const novoStatus = (!r.chegada || String(r.chegada).trim() === '') ? 'EMPENHADA' : 'DISPONÍVEL';
-    const viaturas = this.getViaturas();
-    const vtrMatch = viaturas.find(v => v.prefixo.trim().toUpperCase() === novoItem.viatura);
-    if (vtrMatch) {
-      vtrMatch.status = novoStatus;
-      this.setViaturas(viaturas);
-    }
+    // Recalcula o status de todas as viaturas com base estrita no MAIOR ID de registro de cada viatura
+    const viaturasAtualizadas = this.recalcularStatusTodasViaturas(atuais);
+    const vtrMatch = viaturasAtualizadas.find(v => v.prefixo.trim().toUpperCase() === novoItem.viatura);
+    const novoStatus = vtrMatch?.status || 'DISPONÍVEL';
 
     // Persistência no Banco Central Express
     syncComServidorCentral({
       registros: atuais,
-      viaturas,
+      viaturas: viaturasAtualizadas,
       proximoId: this.getProximoId()
     });
 
@@ -949,10 +1015,10 @@ export const storageService = {
       }
     }
 
-    return { id: idNum, registros: atuais, novoStatus };
+    return { id: idNum, registros: atuais, viaturas: viaturasAtualizadas, novoStatus };
   },
 
-  salvarMultiplosDespachos(lista: { principal: Partial<RegistroDespacho>; apoios: ViaturaApoioItem[] }): { ids: (number | string)[]; registros: RegistroDespacho[] } {
+  salvarMultiplosDespachos(lista: { principal: Partial<RegistroDespacho>; apoios: ViaturaApoioItem[] }): { ids: (number | string)[]; registros: RegistroDespacho[]; viaturas: ViaturaItem[] } {
     const atuais = this.getRegistros();
     const totalDespachos = 1 + lista.apoios.length;
     const idsCriados = this.consumirProximoId(totalDespachos);
@@ -1010,17 +1076,19 @@ export const storageService = {
     // Sempre classificado do maior para o menor registro
     atuais.sort((a, b) => Number(b.id) - Number(a.id));
     localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(atuais));
-    this.setViaturas(viaturas);
 
     // Salva natureza no histórico para preenchimento rápido futuro
     if (itemPrincipal.natureza) {
       this.salvarNaturezaNoHistorico(itemPrincipal.natureza);
     }
 
+    // Recalcula o status de todas as viaturas com base estrita no MAIOR ID de registro de cada viatura
+    const viaturasAtualizadas = this.recalcularStatusTodasViaturas(atuais);
+
     // Persistência no Banco Central Express
     syncComServidorCentral({
       registros: atuais,
-      viaturas,
+      viaturas: viaturasAtualizadas,
       proximoId: this.getProximoId()
     });
 
@@ -1046,11 +1114,10 @@ export const storageService = {
           operador: item.operador
         };
         sb.from('registros').upsert(payload, { onConflict: 'id' }).then();
-        sb.from('viaturas').update({ status: 'EMPENHADA' }).eq('prefixo', item.viatura).then();
       });
     }
 
-    return { ids: idsCriados, registros: atuais };
+    return { ids: idsCriados, registros: atuais, viaturas: viaturasAtualizadas };
   },
 
   async excluirRegistro(id: number | string): Promise<RegistroDespacho[]> {
@@ -1061,6 +1128,10 @@ export const storageService = {
     // Recalcula o próximo ID local imediatamente com base nos registros restantes
     const maxId = this.getMaiorIdRegistros();
     this.setProximoId(maxId > 0 ? maxId + 1 : 1);
+
+    // Recalcula o status de todas as viaturas com base estrita no MAIOR ID dos registros restantes
+    // Ex: ao excluir uma saída aberta, a viatura agora volta a ficar DISPONÍVEL!
+    const viaturasAtualizadas = this.recalcularStatusTodasViaturas(filtrados);
 
     // 1. Exclui no Servidor Central Express pelo endpoint dedicado
     try {
@@ -1073,8 +1144,13 @@ export const storageService = {
       console.warn('Erro ao deletar registro no servidor central:', e);
     }
 
-    // 2. Garante persistência com modo substituir no servidor central
-    await syncComServidorCentral({ registros: filtrados, modo: 'substituir', proximoId: maxId > 0 ? maxId + 1 : 1 });
+    // 2. Garante persistência com modo substituir no servidor central com as viaturas atualizadas
+    await syncComServidorCentral({
+      registros: filtrados,
+      viaturas: viaturasAtualizadas,
+      modo: 'substituir',
+      proximoId: maxId > 0 ? maxId + 1 : 1
+    });
 
     // 3. Exclui definitivamente no Supabase (tanto por Number quanto por String)
     const sb = getSupabase();
@@ -2287,6 +2363,9 @@ export const storageService = {
         });
         const prox = maxSupabase > 0 ? maxSupabase + 1 : 1;
         this.setProximoId(prox);
+
+        // Recalcula o status de todas as viaturas com base estrita no MAIOR ID de registro de cada viatura
+        this.recalcularStatusTodasViaturas(novosFormatados);
       }
 
       return {
@@ -2350,6 +2429,9 @@ export const storageService = {
           });
           const prox = maxId > 0 ? maxId + 1 : 1;
           this.setProximoId(prox);
+
+          // Recalcula o status de todas as viaturas com base estrita no MAIOR ID de cada uma
+          this.recalcularStatusTodasViaturas(serverRegs);
         }
 
         // Bairros

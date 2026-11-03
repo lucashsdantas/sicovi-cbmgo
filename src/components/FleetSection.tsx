@@ -46,23 +46,34 @@ export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, registros,
     .sort(sortAlfabetico);
 
   const renderCard = (v: ViaturaItem, iconType: 'ambulance' | 'truck' | 'car') => {
-    const s = (v.status || 'DISPONÍVEL').toUpperCase();
-    const isDisponivel = s === 'DISPONÍVEL';
+    // Regra oficial do sistema: sempre considera o registro de MAIOR ID daquela viatura
+    const prefUpper = v.prefixo.trim().toUpperCase();
+    const regsVtr = (registros || []).filter(
+      r => r.viatura && r.viatura.trim().toUpperCase() === prefUpper
+    );
+    // Como registros vem ordenado por maior ID desc, o primeiro é o registro de maior ID daquela viatura
+    const maiorRegistro = regsVtr.length > 0 ? regsVtr[0] : null;
 
-    // Busca o registro em aberto da viatura para saber o destino
-    const regAberto = !isDisponivel
-      ? (registros || []).find(
-          r =>
-            r.viatura.trim().toUpperCase() === v.prefixo.trim().toUpperCase() &&
-            (!r.chegada || r.chegada.trim() === '' || r.chegada === 'EM ABERTO')
-        )
-      : null;
+    const temChegada = Boolean(
+      maiorRegistro &&
+      maiorRegistro.chegada &&
+      String(maiorRegistro.chegada).trim() !== '' &&
+      String(maiorRegistro.chegada).trim().toUpperCase() !== 'EM ABERTO' &&
+      String(maiorRegistro.chegada).trim().toUpperCase() !== 'NULL' &&
+      String(maiorRegistro.chegada).trim() !== '-' &&
+      String(maiorRegistro.chegada).trim() !== '---'
+    );
+
+    // Se não há registros ou o registro de maior ID já tem chegada, a viatura está DISPONÍVEL (verde)!
+    // Se o registro de maior ID NÃO possui chegada, a viatura está EMPENHADA (fora da OBM)
+    const isDisponivel = !maiorRegistro || temChegada;
+    const regAberto = !isDisponivel ? maiorRegistro : null;
 
     const isOcorrencia =
-      isDestinoOcorrencia(regAberto?.destino) ||
-      s === 'OCORRÊNCIA' ||
-      (regAberto?.destino || '').trim().toUpperCase() === 'OCORRÊNCIA' ||
-      (regAberto?.destino || '').trim().toUpperCase() === 'OCORRENCIA';
+      !isDisponivel &&
+      (isDestinoOcorrencia(regAberto?.destino) ||
+       (regAberto?.destino || '').trim().toUpperCase() === 'OCORRÊNCIA' ||
+       (regAberto?.destino || '').trim().toUpperCase() === 'OCORRENCIA');
 
     let borderClass = 'border-t-2 border-t-emerald-500 bg-emerald-50/25';
     let labelColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
@@ -81,7 +92,7 @@ export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, registros,
         borderClass = 'border-t-2 border-t-amber-500 bg-amber-50/35';
         labelColor = 'text-amber-900 bg-amber-100/90 border-amber-300 font-extrabold';
         iconColor = 'text-amber-600';
-        const d = (regAberto?.destino || s).trim();
+        const d = (regAberto?.destino || v.status || '').trim();
         statusText = d === 'MANUTENÇÃO' ? 'Manut' : d.length > 9 ? d.slice(0, 8) + '.' : d || 'Fora';
       }
     }
@@ -96,7 +107,7 @@ export const FleetSection: React.FC<FleetSectionProps> = ({ viaturas, registros,
       <button
         key={v.prefixo}
         type="button"
-        onClick={() => onSelectVehicle(v.prefixo, v.status)}
+        onClick={() => onSelectVehicle(v.prefixo, isDisponivel ? 'DISPONÍVEL' : 'EMPENHADA')}
         title={`${v.prefixo} - ${descricaoStatus} (Clique para registrar saída ou chegada)`}
         className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg border border-slate-200/90 shadow-2xs hover:shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer ${borderClass}`}
       >

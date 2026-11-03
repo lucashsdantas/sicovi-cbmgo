@@ -127,15 +127,22 @@ export const MobileHub: React.FC<MobileHubProps> = ({
   };
 
   // Encontra o registro de saída em aberto para uma viatura empenhada
+  // Encontra o registro de saída em aberto considerando estritamente o MAIOR ID da viatura
   const getRegistroEmAberto = (prefixo: string): RegistroDespacho | null => {
     const prefUpper = prefixo.trim().toUpperCase();
-    return (
-      registros.find(r => {
-        const vMatch = r.viatura.trim().toUpperCase() === prefUpper;
-        const emAberto = !r.chegada || r.chegada.trim() === '' || r.chegada === 'EM ABERTO';
-        return vMatch && emAberto;
-      }) || null
+    const regsVtr = registros.filter(r => r.viatura && r.viatura.trim().toUpperCase() === prefUpper);
+    if (regsVtr.length === 0) return null;
+    // Como os registros são ordenados do maior para o menor ID, o primeiro é o mais recente
+    const ultimo = regsVtr[0];
+    const temChegada = Boolean(
+      ultimo.chegada &&
+      String(ultimo.chegada).trim() !== '' &&
+      String(ultimo.chegada).trim().toUpperCase() !== 'EM ABERTO' &&
+      String(ultimo.chegada).trim().toUpperCase() !== 'NULL' &&
+      String(ultimo.chegada).trim() !== '-' &&
+      String(ultimo.chegada).trim() !== '---'
     );
+    return !temChegada ? ultimo : null;
   };
 
   const naturezasHistorico = useMemo(() => storageService.getNaturezasHistorico(), [modalSaidaOpen]);
@@ -180,14 +187,14 @@ export const MobileHub: React.FC<MobileHubProps> = ({
     return bairros.filter(b => b.toLowerCase().includes(t)).slice(0, 6);
   }, [bairros, bairroInput]);
 
-  // Abertura da Tela de Saída ao tocar em viatura DISPONÍVEL
+  // Abertura da Tela de Saída ao tocar em viatura DISPONÍVEL ou Chegada se EMPENHADA
   const handleSelecionarViatura = (vtr: ViaturaItem) => {
     setErroModal(null);
-    const status = (vtr.status || '').toUpperCase();
+    const regAtivo = getRegistroEmAberto(vtr.prefixo);
+    const isDisponivel = regAtivo === null;
 
-    if (status === 'EMPENHADA') {
-      // Abre tela de chegada / finalização ou conflito
-      const regAtivo = getRegistroEmAberto(vtr.prefixo);
+    if (!isDisponivel && regAtivo) {
+      // Abre tela de chegada / finalização
       setVtrChegada(vtr);
       setRegistroAtivoChegada(regAtivo);
 
@@ -567,8 +574,8 @@ export const MobileHub: React.FC<MobileHubProps> = ({
               {/* Grid de 2 Colunas com Cantos Arredondados Altos */}
               <div className="grid grid-cols-2 gap-3.5">
                 {grupo.lista.map(vtr => {
-                  const isDisponivel = (vtr.status || '').toUpperCase() === 'DISPONÍVEL';
-                  const regAtivo = !isDisponivel ? getRegistroEmAberto(vtr.prefixo) : null;
+                  const regAtivo = getRegistroEmAberto(vtr.prefixo);
+                  const isDisponivel = regAtivo === null;
                   const IconeVtr = getViaturaIcon(vtr.categoria, vtr.prefixo);
 
                   if (isDisponivel) {

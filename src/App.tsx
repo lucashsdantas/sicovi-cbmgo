@@ -217,17 +217,17 @@ export default function App() {
   const carregarDadosCentrais = useCallback(async () => {
     try {
       await storageService.carregarDoBancoCentral();
-      const vtrs = storageService.getViaturas();
+      const regs = storageService.getRegistros();
+      const vtrs = storageService.recalcularStatusTodasViaturas(regs);
       const mils = storageService.getMilitares();
       const ops = storageService.getOperadores();
-      const regs = storageService.getRegistros();
       const esc = storageService.getEscalas();
 
-      setViaturas(vtrs);
-      setMilitares(mils);
-      setOperadores(ops);
-      setRegistros(regs);
-      setEscalas(esc);
+      setRegistros([...regs]);
+      setViaturas([...vtrs]);
+      setMilitares([...mils]);
+      setOperadores({ ...ops });
+      setEscalas([...esc]);
       return { vtrs, mils, ops, regs, esc };
     } catch (e) {
       console.warn('Erro ao carregar dados centrais:', e);
@@ -480,15 +480,25 @@ export default function App() {
 
   // KPI Calculations
   const disponiveisCount = useMemo(() => {
-    return viaturas.filter(v => (v.status || '').toUpperCase() === 'DISPONÍVEL').length;
-  }, [viaturas]);
+    return viaturas.filter(v => {
+      const prefUpper = v.prefixo.trim().toUpperCase();
+      const regsVtr = registros.filter(r => r.viatura && r.viatura.trim().toUpperCase() === prefUpper);
+      if (regsVtr.length === 0) return true;
+      const ultimo = regsVtr[0];
+      return Boolean(
+        ultimo.chegada &&
+        String(ultimo.chegada).trim() !== '' &&
+        String(ultimo.chegada).trim().toUpperCase() !== 'EM ABERTO' &&
+        String(ultimo.chegada).trim().toUpperCase() !== 'NULL' &&
+        String(ultimo.chegada).trim() !== '-' &&
+        String(ultimo.chegada).trim() !== '---'
+      );
+    }).length;
+  }, [viaturas, registros]);
 
   const empenhadasCount = useMemo(() => {
-    return viaturas.filter(v => {
-      const s = (v.status || '').toUpperCase();
-      return s === 'EMPENHADA' || s === 'OCORRÊNCIA' || s === 'VISTORIA';
-    }).length;
-  }, [viaturas]);
+    return Math.max(0, viaturas.length - disponiveisCount);
+  }, [viaturas.length, disponiveisCount]);
 
   // Filtered Records for Table
   const filteredRegistros = useMemo(() => {
@@ -674,10 +684,12 @@ export default function App() {
 
     if (apoios.length > 0) {
       const res = storageService.salvarMultiplosDespachos({ principal, apoios });
+      const vtrsAtualizadas = storageService.recalcularStatusTodasViaturas(res.registros);
       setRegistros([...res.registros]);
-      setViaturas([...storageService.getViaturas()]);
+      setViaturas([...vtrsAtualizadas]);
       markRecentlySaved(res.ids[res.ids.length - 1]);
       setIsDispatchModalOpen(false);
+      setCurrentPage(1);
       showToast(
         'Comboio Registrado!',
         `${apoios.length + 1} viaturas despachadas simultaneamente (IDs: ${res.ids.join(', ')}).`
@@ -689,10 +701,28 @@ export default function App() {
       });
     } else {
       const res = storageService.salvarRegistro(principal);
+      const vtrsAtualizadas = storageService.recalcularStatusTodasViaturas(res.registros);
       setRegistros([...res.registros]);
-      setViaturas([...storageService.getViaturas()]);
+      setViaturas([...vtrsAtualizadas]);
       markRecentlySaved(res.id);
       setIsDispatchModalOpen(false);
+
+      // Se o filtro de apenas em aberto estava ativo e o despacho foi finalizado (chegada preenchida),
+      // desativa o filtro para que o registro continue visível na tabela imediatamente
+      if (apenasEmAberto && principal.chegada && String(principal.chegada).trim() !== '') {
+        setApenasEmAberto(false);
+      }
+
+      // Se a data de saída for anterior a dataInicio ativa, expande o filtro para exibir o registro imediatamente
+      if (principal.saida && dataInicio) {
+        const dtSaida = parseDateTimeFormat(principal.saida);
+        const dtIni = parseDateTimeFormat(dataInicio);
+        if (dtSaida && dtIni && dtSaida < dtIni) {
+          setDataInicio(formatarIsoParaInputLocal(new Date(dtSaida.getTime() - 60000)));
+          setPresetAtivo('personalizado');
+        }
+      }
+
       const isEdit = Boolean(registroEmEdicao && registroEmEdicao.id !== 'PENDENTE');
       showToast(
         isEdit ? 'Registro Atualizado!' : 'Registro Salvo!',
@@ -807,8 +837,9 @@ export default function App() {
     if (recordToDeleteId === null) return;
     const idExcluido = recordToDeleteId;
     const updated = await storageService.excluirRegistro(idExcluido);
+    const vtrsAtualizadas = storageService.recalcularStatusTodasViaturas(updated);
     setRegistros([...updated]);
-    setViaturas([...storageService.getViaturas()]);
+    setViaturas([...vtrsAtualizadas]);
     setIsDeleteConfirmOpen(false);
     setRecordToDeleteId(null);
     showToast('Registro Excluído!', `Registro #${idExcluido} excluído com sucesso do banco de dados.`);
