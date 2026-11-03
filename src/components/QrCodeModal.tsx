@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { ViaturaItem } from '../types/sicovi';
+import { storageService } from '../services/storageService';
 
 interface QrCodeModalProps {
   isOpen: boolean;
@@ -34,6 +35,12 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
   const [copiadoVtr, setCopiadoVtr] = useState<string | null>(null);
   const [visualizacaoModo, setVisualizacaoModo] = useState<'grid' | 'impressao'>('grid');
   const printAreaRef = useRef<HTMLDivElement>(null);
+
+  // Garante a lista atualizada de viaturas mesmo que a prop venha vazia ou desatualizada
+  const listaViaturas = useMemo(() => {
+    if (Array.isArray(viaturas) && viaturas.length > 0) return viaturas;
+    return storageService.getViaturas();
+  }, [viaturas, isOpen]);
 
   // Normalização da categoria
   const getCategoria = (v: ViaturaItem): string => {
@@ -61,7 +68,8 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
     let isMounted = true;
     const gerarCodigos = async () => {
       const novoMapa: Record<string, string> = {};
-      for (const v of viaturas) {
+      for (const v of listaViaturas) {
+        if (!v || !v.prefixo) continue;
         const url = getUrlForViatura(v.prefixo);
         try {
           const dataUrl = await QRCode.toDataURL(url, {
@@ -87,18 +95,19 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, viaturas]);
+  }, [isOpen, listaViaturas]);
 
   const viaturasFiltradas = useMemo(() => {
-    return viaturas
+    return listaViaturas
       .filter(v => {
+        if (!v || !v.prefixo) return false;
         const matchBusca = v.prefixo.toLowerCase().includes(busca.toLowerCase().trim());
         if (!matchBusca) return false;
         if (categoriaAtiva === 'TODAS') return true;
         return getCategoria(v) === categoriaAtiva;
       })
       .sort((a, b) => a.prefixo.localeCompare(b.prefixo, 'pt-BR', { numeric: true, sensitivity: 'base' }));
-  }, [viaturas, busca, categoriaAtiva]);
+  }, [listaViaturas, busca, categoriaAtiva]);
 
   const handleCopiarLink = (prefixo: string) => {
     const url = getUrlForViatura(prefixo);
@@ -120,13 +129,16 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
   };
 
   const handleImprimir = () => {
-    window.print();
+    setVisualizacaoModo('impressao');
+    setTimeout(() => {
+      window.print();
+    }, 150);
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 print:p-0 print:bg-white print:static">
+    <div className="fixed inset-0 z-[80] overflow-y-auto bg-slate-900/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 print:p-0 print:bg-white print:static">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden print:max-h-none print:max-w-none print:shadow-none print:border-none print:rounded-none">
         
         {/* Modal Header (Escondido na impressão) */}
@@ -137,13 +149,13 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-black tracking-tight flex items-center gap-2">
-                QR Codes das Viaturas
+                Gerador de Etiquetas & QR Codes
                 <span className="text-[10px] bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-bold">
                   Fixação no Painel
                 </span>
               </h2>
               <p className="text-xs text-slate-300">
-                Aponte a câmera do celular para abrir o mobile com a viatura já selecionada após login
+                Gere e imprima folhas de etiquetas para colar nos painéis das viaturas
               </p>
             </div>
           </div>

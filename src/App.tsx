@@ -893,6 +893,12 @@ export default function App() {
           }}
           onOpenQrCodes={() => setIsQrCodeModalOpen(true)}
         />
+        {/* Modal de Geração e Impressão de Etiquetas e QR Codes */}
+        <QrCodeModal
+          isOpen={isQrCodeModalOpen}
+          onClose={() => setIsQrCodeModalOpen(false)}
+          viaturas={viaturas}
+        />
       </>
     );
   }

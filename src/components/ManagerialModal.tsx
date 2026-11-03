@@ -972,13 +972,16 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
             {autenticado && onOpenQrCodes && (
               <button
                 type="button"
-                onClick={onOpenQrCodes}
+                onClick={() => {
+                  soundEffects.playClick();
+                  onOpenQrCodes();
+                }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer"
-                title="Gerar e imprimir QR Codes das viaturas para fixação no painel"
+                title="Gerador de etiquetas de QR Codes para as viaturas"
               >
                 <QrCode className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Gerar QR Codes das Viaturas</span>
-                <span className="sm:hidden">QR Codes</span>
+                <span className="hidden sm:inline">Gerador de Etiquetas</span>
+                <span className="sm:hidden">Etiquetas</span>
               </button>
             )}
             <button
@@ -1084,12 +1087,15 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
               {onOpenQrCodes && (
                 <button
                   type="button"
-                  onClick={onOpenQrCodes}
+                  onClick={() => {
+                    soundEffects.playClick();
+                    onOpenQrCodes();
+                  }}
                   className="flex items-center gap-2 px-3.5 py-2 text-xs font-black border-b-2 border-transparent text-amber-900 bg-amber-100/80 hover:bg-amber-200/90 rounded-t-lg transition-all cursor-pointer whitespace-nowrap shrink-0"
-                  title="Gerar e imprimir QR Codes das viaturas para fixação no painel"
+                  title="Gerador de etiquetas de QR Codes para as viaturas"
                 >
                   <QrCode className="w-4 h-4 text-amber-700" />
-                  <span>Gerar QR Codes</span>
+                  <span>Gerador de Etiquetas</span>
                 </button>
               )}
             </div>
@@ -1107,7 +1113,7 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                       </div>
                       <div>
                         <h4 className="text-xs font-black uppercase text-amber-950 flex items-center gap-2">
-                          <span>QR Codes das Viaturas para Painel</span>
+                          <span>Gerador de Etiquetas &bull; QR Codes para Painel</span>
                           <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.2 rounded-full font-bold">Exclusivo Administrativo</span>
                         </h4>
                         <p className="text-[11px] text-amber-900/80 font-medium">
@@ -1118,11 +1124,14 @@ CREATE POLICY "Acesso Total Registros" ON public.registros FOR ALL USING (true);
                     {onOpenQrCodes && (
                       <button
                         type="button"
-                        onClick={onOpenQrCodes}
+                        onClick={() => {
+                          soundEffects.playClick();
+                          onOpenQrCodes();
+                        }}
                         className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-xs transition-all cursor-pointer"
                       >
                         <QrCode className="w-4 h-4 text-amber-400" />
-                        <span>Gerar e Imprimir QR Codes</span>
+                        <span>Abrir Gerador de Etiquetas</span>
                       </button>
                     )}
                   </div>
