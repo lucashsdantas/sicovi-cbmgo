@@ -19,14 +19,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onOpenChangePassword,
   onOpenManagerial
 }) => {
+  const vtrPredefinidaEfetiva = useMemo(() => {
+    if (viaturaPredefinida) return viaturaPredefinida;
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('sicovi_qr_vtr') || null;
+    }
+    return null;
+  }, [viaturaPredefinida]);
+
   const isMobileInitial = typeof window !== 'undefined' && (
-    Boolean(viaturaPredefinida) ||
+    Boolean(vtrPredefinidaEfetiva) ||
     window.innerWidth < 768 ||
     /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   );
 
   const [modoAcesso, setModoAcesso] = useState<'desktop' | 'mobile'>(
-    viaturaPredefinida ? 'mobile' : isMobileInitial ? 'mobile' : 'desktop'
+    vtrPredefinidaEfetiva ? 'mobile' : isMobileInitial ? 'mobile' : 'desktop'
   );
   const [lembrar, setLembrar] = useState(() => {
     return localStorage.getItem('lembrarLogin') === 'true';
@@ -173,7 +181,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       }
 
       setSenha('');
-      onLogin(res.usuario || militarEscolhido, 'desktop');
+      onLogin(res.usuario || militarEscolhido, vtrPredefinidaEfetiva ? 'mobile' : 'desktop');
     } finally {
       setAutenticando(false);
     }
@@ -232,7 +240,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           Controle Operacional de Viaturas &bull; CBMGO
         </p>
 
-        {viaturaPredefinida && (
+        {vtrPredefinidaEfetiva && (
           <div className="w-full mb-4 p-3 bg-amber-500/15 border-2 border-amber-500/80 rounded-2xl flex items-center gap-2.5 animate-in slide-in-from-top-2 duration-300">
             <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-xs">
               <QrCode className="w-5 h-5" />
@@ -241,7 +249,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               <div className="text-[10px] uppercase font-black tracking-wider text-amber-900 flex items-center gap-1.5">
                 <span>QR Code Lido</span>
                 <span className="bg-amber-500/30 text-amber-950 px-1.5 py-0.2 rounded font-black">
-                  {viaturaPredefinida}
+                  {vtrPredefinidaEfetiva}
                 </span>
               </div>
               <div className="text-[11px] font-semibold text-slate-700 leading-tight">

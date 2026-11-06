@@ -51,16 +51,28 @@ export default function App() {
   const [viaturaAlvoMobile, setViaturaAlvoMobile] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
-    return params.get('vtr');
+    const vtr = params.get('vtr');
+    if (vtr) {
+      const limpo = vtr.trim().toUpperCase();
+      sessionStorage.setItem('sicovi_qr_vtr', limpo);
+      return limpo;
+    }
+    return sessionStorage.getItem('sicovi_qr_vtr');
   });
 
-  // Limpa imediatamente o parâmetro ?vtr=... da barra de endereço e do histórico do navegador
-  // evitando que acessos posteriores fiquem reabrindo a viatura lida anteriormente
+  // Limpa o parâmetro ?vtr=... da barra de endereço para manter a URL limpa,
+  // mas preserva a viatura lida em sessionStorage e no estado para consumo após o login
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.search) {
       try {
         const url = new URL(window.location.href);
         if (url.searchParams.has('vtr')) {
+          const vtr = url.searchParams.get('vtr');
+          if (vtr) {
+            const limpo = vtr.trim().toUpperCase();
+            setViaturaAlvoMobile(limpo);
+            sessionStorage.setItem('sicovi_qr_vtr', limpo);
+          }
           url.searchParams.delete('vtr');
           const novoSearch = url.searchParams.toString();
           const novaUrl = url.pathname + (novoSearch ? '?' + novoSearch : '');
@@ -449,16 +461,19 @@ export default function App() {
 
   // Login & Logout
   const handleLogin = (selectedOp: string, ambiente: 'desktop' | 'mobile' = 'desktop') => {
+    // Se há viatura predefinida vinda do QR Code (no estado ou sessionStorage), força o ambiente mobile da viatura
+    const vtrPendente = viaturaAlvoMobile || (typeof window !== 'undefined' ? sessionStorage.getItem('sicovi_qr_vtr') : null);
+    const targetAmbiente = vtrPendente ? 'mobile' : ambiente;
+
     setOperador(selectedOp);
-    setModoAmbiente(ambiente);
+    setModoAmbiente(targetAmbiente);
     sessionStorage.setItem('operadorLogado', selectedOp);
-    sessionStorage.setItem('sicovi_modo_ambiente', ambiente);
-    // Limpa a viatura predefinida do QR Code para não persistir em sessões futuras
-    setViaturaAlvoMobile(null);
+    sessionStorage.setItem('sicovi_modo_ambiente', targetAmbiente);
+    // NÃO limpa setViaturaAlvoMobile(null) aqui para permitir que o MobileHub abra a viatura automaticamente
     atualizarDataFimParaAgora();
     showToast(
       'Acesso Concluído',
-      `${ambiente === 'mobile' ? 'Condutor' : 'Operador'} ${selectedOp} autenticado no SICOVI.`
+      `${targetAmbiente === 'mobile' ? 'Condutor' : 'Operador'} ${selectedOp} autenticado no SICOVI.`
     );
   };
 
@@ -467,6 +482,7 @@ export default function App() {
     setViaturaAlvoMobile(null);
     sessionStorage.removeItem('operadorLogado');
     sessionStorage.removeItem('sicovi_modo_ambiente');
+    sessionStorage.removeItem('sicovi_qr_vtr');
     if (typeof window !== 'undefined' && window.location.search) {
       try {
         const url = new URL(window.location.href);
@@ -912,12 +928,18 @@ export default function App() {
         registros={registros}
         militares={militares}
         bairros={bairros}
-        viaturaPredefinida={viaturaAlvoMobile}
+        viaturaPredefinida={viaturaAlvoMobile || (typeof window !== 'undefined' ? sessionStorage.getItem('sicovi_qr_vtr') : null)}
         onRefreshData={carregarDadosCentrais}
         onLogout={handleLogout}
         onSwitchToDesktop={() => {
           setModoAmbiente('desktop');
           sessionStorage.setItem('sicovi_modo_ambiente', 'desktop');
+        }}
+        onConsumeViaturaPredefinida={() => {
+          setViaturaAlvoMobile(null);
+          if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('sicovi_qr_vtr');
+          }
         }}
       />
     );

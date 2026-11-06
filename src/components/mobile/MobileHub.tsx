@@ -29,6 +29,7 @@ interface MobileHubProps {
   onRefreshData: () => void;
   onLogout: () => void;
   onSwitchToDesktop: () => void;
+  onConsumeViaturaPredefinida?: () => void;
 }
 
 const getViaturaIcon = (categoria?: string, prefixo?: string) => {
@@ -66,7 +67,8 @@ export const MobileHub: React.FC<MobileHubProps> = ({
   viaturaPredefinida = null,
   onRefreshData,
   onLogout,
-  onSwitchToDesktop
+  onSwitchToDesktop,
+  onConsumeViaturaPredefinida
 }) => {
   // Filtros de busca e categoria no mobile
   const [buscaVtr, setBuscaVtr] = useState('');
@@ -256,16 +258,40 @@ export const MobileHub: React.FC<MobileHubProps> = ({
   // Se o militar acessou via QR Code da viatura, seleciona e abre automaticamente
   const jaSelecionouPredefinida = useRef(false);
   useEffect(() => {
-    if (viaturaPredefinida && !jaSelecionouPredefinida.current && viaturas.length > 0) {
-      const vtrAlvo = viaturas.find(
-        v => v.prefixo.trim().toUpperCase() === viaturaPredefinida.trim().toUpperCase()
+    const vtrEfetiva = viaturaPredefinida || (typeof window !== 'undefined' ? sessionStorage.getItem('sicovi_qr_vtr') : null);
+    if (vtrEfetiva && !jaSelecionouPredefinida.current) {
+      const vtrNorm = (vtrEfetiva || '').trim().toUpperCase().replace(/[\s-_]/g, '');
+      if (!vtrNorm) return;
+
+      const todasViaturas = viaturas && viaturas.length > 0 ? viaturas : storageService.getViaturas();
+      let vtrAlvo = todasViaturas.find(
+        v => (v.prefixo || '').trim().toUpperCase().replace(/[\s-_]/g, '') === vtrNorm
       );
-      if (vtrAlvo) {
-        jaSelecionouPredefinida.current = true;
-        handleSelecionarViatura(vtrAlvo);
+
+      // Fallback: busca por correspondência parcial
+      if (!vtrAlvo) {
+        vtrAlvo = todasViaturas.find(
+          v => (v.prefixo || '').trim().toUpperCase().replace(/[\s-_]/g, '').includes(vtrNorm) ||
+               vtrNorm.includes((v.prefixo || '').trim().toUpperCase().replace(/[\s-_]/g, ''))
+        );
       }
+
+      // Se ainda não existir no cadastro, cria representação da viatura para não travar o condutor
+      if (!vtrAlvo) {
+        vtrAlvo = {
+          prefixo: vtrEfetiva.trim().toUpperCase(),
+          categoria: 'RESGATE',
+          status: 'DISPONÍVEL'
+        };
+      }
+
+      jaSelecionouPredefinida.current = true;
+      setTimeout(() => {
+        handleSelecionarViatura(vtrAlvo!);
+        onConsumeViaturaPredefinida?.();
+      }, 150);
     }
-  }, [viaturaPredefinida, viaturas]);
+  }, [viaturaPredefinida, viaturas, onConsumeViaturaPredefinida]);
 
   // Stepper helper para KM
   const alterarKmSaida = (delta: number) => {
@@ -307,12 +333,17 @@ export const MobileHub: React.FC<MobileHubProps> = ({
     // Fuso horário oficial de Brasília (UTC-3), idêntico ao desktop
     const dataHoraSaidaFmt = formatarDataHoraPtBr(getAgoraBrasilia(), true);
 
+    // Obtém equipe escalada para a viatura se disponível
+    const escalaAtiva = storageService.getEscalas().find(
+      esc => esc.viatura.trim().toUpperCase() === vtrSelecionadaParaSaida.prefixo.trim().toUpperCase()
+    );
+
     const payload: Partial<RegistroDespacho> = {
       id: 'PENDENTE', // Exatamente como no desktop: atribui o último ID existente somado com 1
       viatura: vtrSelecionadaParaSaida.prefixo.toUpperCase().trim(),
       condutor: condutor.trim(),
       operador: condutor.trim(), // Regra: condutor e operador têm mesmo valor no mobile
-      equipe: '',
+      equipe: escalaAtiva?.equipe || '',
       destino: destinoSelecionado,
       natureza: naturezaInput.trim() || destinoSelecionado,
       bairro: bairroInput.trim(),
