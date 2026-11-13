@@ -13,11 +13,13 @@ import {
   X,
   Ambulance,
   Truck,
-  Car
+  Car,
+  ExternalLink
 } from 'lucide-react';
 import { ViaturaItem, RegistroDespacho, CategoriaViatura } from '../../types/sicovi';
 import { storageService, formatarDataHoraPtBr, getAgoraBrasilia, getAgoraIsoBrasilia, isDestinoOcorrencia } from '../../services/storageService';
 import { soundEffects } from '../../utils/soundEffects';
+import { getUrlAtendimentoSsp, hasValidRai } from '../../utils/occurrenceLink';
 
 interface MobileHubProps {
   condutor: string;
@@ -925,6 +927,20 @@ export const MobileHub: React.FC<MobileHubProps> = ({
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-[10px] font-black uppercase text-slate-400">Natureza:</span>
                     <span className="font-bold text-slate-700 italic">{registroAtivoChegada.natureza}</span>
+                  </div>
+                )}
+                {hasValidRai(registroAtivoChegada.rai) && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-[10px] font-black uppercase text-slate-400">Ocorrência / RAI:</span>
+                    <a
+                      href={getUrlAtendimentoSsp(registroAtivoChegada.rai)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-mono font-bold text-blue-700 hover:text-blue-900 underline"
+                    >
+                      <span>{registroAtivoChegada.rai.trim()}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
                   </div>
                 )}
                 <div className="flex justify-between items-center text-xs">

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { RegistroDespacho } from '../types/sicovi';
-import { Edit, Trash2, FilterX, Check, AlertCircle, Clock, Copy } from 'lucide-react';
+import { Edit, Trash2, FilterX, Check, AlertCircle, Clock, Copy, ExternalLink } from 'lucide-react';
+import { getUrlAtendimentoSsp, hasValidRai } from '../utils/occurrenceLink';
 
 interface ColumnFilters {
   id: string;
@@ -76,7 +77,7 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({
               <th className="py-2.5 px-3 text-left min-w-[180px]">Equipe</th>
               <th className="py-2.5 px-3 text-left min-w-[150px]">Destino</th>
               <th className="py-2.5 px-3 text-left min-w-[110px]">Bairro</th>
-              <th className="py-2.5 px-3 text-center w-[90px]">RAI</th>
+              <th className="py-2.5 px-3 text-center min-w-[120px]">RAI</th>
               <th className="py-2.5 px-3 text-left min-w-[130px]">Natureza</th>
               <th className="py-2.5 px-3 text-center w-[110px]">Saída</th>
               <th className="py-2.5 px-3 text-center w-[80px]">Km S.</th>
@@ -243,32 +244,40 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({
                       {linha.bairro || '---'}
                     </td>
                     <td className="py-2 px-3 text-center whitespace-nowrap">
-                      {linha.rai && linha.rai !== '---' ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCopiarRai(linha.id, linha.rai);
-                          }}
-                          className={`inline-flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded border transition-all cursor-pointer ${
-                            copiadoRaiId === linha.id
-                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold scale-105 shadow-xs'
-                              : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 active:scale-95'
-                          }`}
-                          title="Clique para copiar o número do RAI"
-                        >
-                          {copiadoRaiId === linha.id ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-700 inline" />
-                              <span>Copiado!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3 text-slate-400 group-hover:text-slate-600 inline" />
-                              <span>{linha.rai}</span>
-                            </>
-                          )}
-                        </button>
+                      {hasValidRai(linha.rai) ? (
+                        <div className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50/70 overflow-hidden shadow-2xs">
+                          <a
+                            href={getUrlAtendimentoSsp(linha.rai)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 font-mono text-[11px] font-bold px-2 py-0.5 text-blue-700 hover:text-blue-900 hover:bg-blue-100/80 transition-colors"
+                            title={`Abrir ocorrência ${linha.rai.trim()} no Atendimento SSP-GO em nova guia`}
+                          >
+                            <span>{linha.rai.trim()}</span>
+                            <ExternalLink className="w-3 h-3 shrink-0 opacity-80" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleCopiarRai(linha.id, linha.rai);
+                            }}
+                            className={`px-1.5 py-0.5 border-l border-blue-200 transition-colors cursor-pointer flex items-center justify-center ${
+                              copiadoRaiId === linha.id
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'text-slate-500 hover:text-slate-800 hover:bg-blue-100/60'
+                            }`}
+                            title={copiadoRaiId === linha.id ? 'Copiado!' : 'Copiar número do RAI'}
+                            aria-label={`Copiar número do RAI ${linha.rai.trim()}`}
+                          >
+                            {copiadoRaiId === linha.id ? (
+                              <Check className="w-3 h-3 text-emerald-700" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
                       ) : (
                         <span className="font-mono text-[11px] text-slate-400">---</span>
                       )}

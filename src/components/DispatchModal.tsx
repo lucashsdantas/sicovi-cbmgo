@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { RegistroDespacho, ViaturaApoioItem } from '../types/sicovi';
 import { formatarIsoParaInputLocal, getAgoraBrasilia, storageService } from '../services/storageService';
-import { X, Save, Search, Users, PlusCircle, Trash2, Gauge, PlaneTakeoff, PlaneLanding, ShieldAlert } from 'lucide-react';
+import { X, Save, Search, Users, PlusCircle, Trash2, Gauge, PlaneTakeoff, PlaneLanding, ShieldAlert, ExternalLink } from 'lucide-react';
 import { SystemAlertModal, AlertModalType } from './SystemAlertModal';
 import { MilitarySelectorModal } from './MilitarySelectorModal';
 import { soundEffects } from '../utils/soundEffects';
+import { getUrlAtendimentoSsp, hasValidRai } from '../utils/occurrenceLink';
 
 interface DispatchModalProps {
   isOpen: boolean;
@@ -736,12 +737,26 @@ export const DispatchModal: React.FC<DispatchModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {/* 1. Número do RAI (Ocorrência) - Primeira posição conforme solicitado */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Número do RAI (Ocorrência)</label>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-700">Número do RAI (Ocorrência)</label>
+                  {hasValidRai(rai) && (
+                    <a
+                      href={getUrlAtendimentoSsp(rai)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                      title={`Abrir ocorrência ${rai.trim()} no Atendimento SSP-GO em nova guia`}
+                    >
+                      <span>Abrir ocorrência</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={rai}
                   onChange={e => setRai(e.target.value)}
-                  placeholder="Ex: 2026-123456"
+                  placeholder="Ex: 49573425"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:border-red-700"
                 />
               </div>
